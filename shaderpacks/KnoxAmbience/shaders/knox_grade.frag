@@ -42,6 +42,9 @@
 #ifndef OPTION_KNOX_WARMTH
 #define OPTION_KNOX_WARMTH 0.35
 #endif
+#ifndef OPTION_KNOX_WINDOW_GLOW
+#define OPTION_KNOX_WINDOW_GLOW 0.6
+#endif
 #ifndef OPTION_KNOX_VIGNETTE
 #define OPTION_KNOX_VIGNETTE 0.25
 #endif
@@ -196,6 +199,11 @@ void main() {
 
     // Cozy pools: at night, lit pixels lean warm (lamplight, flashlights, windows).
     color = mix(color, color * vec3(1.12, 0.98, 0.82), OPTION_KNOX_WARMTH * night * lit);
+
+    // Inviting windows: at night, warm light sources (lit windows, lamps, fires) glow a little
+    // brighter and more golden against the dark.
+    float warmLight = smoothstep(0.15, 0.5, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
+    color += color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight;
 
     // Gentle vignette to frame the view.
     vec2 v = vUv - 0.5;
