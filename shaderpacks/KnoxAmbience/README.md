@@ -20,6 +20,14 @@ Copy this folder (`KnoxAmbience`, the one holding `pack.properties`) into
 `Zomboid/viewpoint-shaderpacks/`, restart the game, and pick **Knox Ambience** under
 Delete > Graphics > Shaders. Its options are in the same settings page, next to Viewpoint's.
 
+The settings page also shows "Left out: KnoxAmbience: no shaders folder with shaders.properties or a
+program". That's expected: Viewpoint checks every pack folder for a Minecraft pack too, and ours is
+native. Don't add a `shaders.properties` to silence it, or Viewpoint will also load the folder as a
+Minecraft pack.
+
+Rolling Hills (3815630947) currently turns its hills off under any native pack it doesn't know by
+name, including this one.
+
 ## Performance
 
 One extra full-screen pass with two texture reads per pixel, no extra buffers. Everything heavy
