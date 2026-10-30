@@ -15,6 +15,8 @@
 //   time of day only, so it never flickers as things move on screen. The sky is left alone.
 // - Light spill and lamp halos: bright areas (a lit doorway, a lamp, a window) bleed soft light
 //   into the dark around them, and the brightest get a warm halo.
+// - Surface light: sky fill on shadowed up-facing surfaces and warm ground bounce on walls,
+//   coloured bounce in ambient-occluded corners, and a soft rim on edges facing away from us.
 // - Sun glow: by day the sun and the clouds it lights glow softly over the scene around them,
 //   warmer towards sunrise and sunset.
 // - Colour: weather-driven saturation (clear is vivid, rain is muted), neutral darks, silver
@@ -47,6 +49,15 @@
 #endif
 #ifndef OPTION_KNOX_SUN_GLOW
 #define OPTION_KNOX_SUN_GLOW 0.5
+#endif
+#ifndef OPTION_KNOX_SKY_FILL
+#define OPTION_KNOX_SKY_FILL 0.5
+#endif
+#ifndef OPTION_KNOX_AO_BOUNCE
+#define OPTION_KNOX_AO_BOUNCE 0.5
+#endif
+#ifndef OPTION_KNOX_RIM
+#define OPTION_KNOX_RIM 0.15
 #endif
 #ifndef OPTION_KNOX_SHADOW_LIFT
 #define OPTION_KNOX_SHADOW_LIFT 0.2
@@ -97,6 +108,9 @@
 #ifndef OPTION_KNOX_DEBUG_DEPTH
 #define OPTION_KNOX_DEBUG_DEPTH 2
 #endif
+#ifndef OPTION_KNOX_DEBUG_NORMALS
+#define OPTION_KNOX_DEBUG_NORMALS 3
+#endif
 #ifndef OPTION_KNOX_DEBUG
 #define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
 #endif
@@ -110,6 +124,12 @@ uniform sampler2D uKnoxGlow;
 uniform sampler2D uKnoxBloom8;
 uniform sampler2D uKnoxBloom16;
 uniform sampler2D uKnoxBloom32;
+uniform sampler2D uNormal;    // Viewpoint's G-buffer: surface normal in rgb (world space, y up)
+uniform sampler2D uAlbedo;    // Viewpoint's G-buffer: surface colour in rgb
+uniform sampler2D uOcclusion; // Viewpoint's ambient occlusion: a = 1 open .. 0 fully occluded
+uniform mat4 uInvViewProjection;
+uniform vec3 uEye;            // camera position, world space
+uniform vec3 uSunColor;
 uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
@@ -117,7 +137,7 @@ uniform vec3 uFogColor;       // Viewpoint's fog colour (follows the sky); 0 if 
 uniform vec3 uSunDir;         // unit vector, y up
 uniform float uNight;         // 0 day .. about 0.3 full night
 uniform float uRainStrength;  // 0 .. 1
-uniform float uRain;          // 0 .. 1, the name Viewpoint's weather shaders use
+uniform float uRain;          // 0 .. 1, the name Viewpoint sets for pack passes
 uniform float uWet;           // 0 .. 1, lags behind rain
 
 in vec2 vUv;
@@ -231,6 +251,59 @@ vec3 knoxLift(vec3 c, float gain) {
     return c * (mapped / m);
 }
 
+// Ambient occlusion with coloured multi-bounce (Jimenez et al. 2016 fit): light bouncing inside a
+// corner takes on the surface's colour, so occluded corners of a red brick wall read deep red
+// instead of grey. Returns the factor to apply on top of an image that already has plain AO.
+vec3 knoxAoBounce(float ao, vec3 albedo) {
+    vec3 a = 2.0404 * albedo - 0.3324;
+    vec3 b = -4.7951 * albedo + 0.6417;
+    vec3 c = 2.7552 * albedo + 0.6903;
+    vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao);
+    return clamp(bounced / ao, 1.0, 2.0);
+}
+
+// Surface light from the G-buffer, near world only: sky fill, ground bounce, coloured AO, rim.
+// Every part is 0 at its option's 0, and pixels without a normal are left alone.
+vec3 knoxSurfaceLight(vec3 color, float night, float farness) {
+    if (textureLod(uDepth, vUv, 0.0).r >= 1.0) return color;
+    vec3 n = textureLod(uNormal, vUv, 0.0).rgb;
+    if (dot(n, n) < 0.25) return color;
+    n = normalize(n);
+    vec4 surface = textureLod(uAlbedo, vUv, 0.0);
+    vec3 albedo = surface.rgb;
+    float foliage = step(0.9, surface.a);  // Viewpoint marks foliage with alpha 1
+    float day = 1.0 - night;
+    float near = 1.0 - farness;
+    float luma = knoxLuma(color);
+
+    // Coloured bounce in occluded corners.
+    float ao = textureLod(uOcclusion, vUv, 0.0).a;
+    if (OPTION_KNOX_AO_BOUNCE > 0.0 && ao > 0.05 && ao < 0.999) {
+        color *= mix(vec3(1.0), knoxAoBounce(ao, albedo), OPTION_KNOX_AO_BOUNCE * near);
+    }
+
+    // Sky fill and ground bounce, only into shade: up-facing shadowed surfaces take a little of
+    // the sky's colour, walls a little warm light bounced off the sunlit ground.
+    vec3 sun = uSunColor / max(max(max(uSunColor.r, uSunColor.g), uSunColor.b), 1.0);
+    vec3 skyColor = dot(uFogColor, vec3(1.0)) > 0.03 ? uFogColor : vec3(0.45, 0.55, 0.7);
+    float shade = 1.0 - smoothstep(0.08, 0.4, luma);
+    float up = max(n.y, 0.0);
+    vec3 fill = skyColor * up * 0.5 + 0.2 * (skyColor + sun) * (1.0 - n.y) * 0.5;
+    color = knoxAddLight(color, albedo * fill * OPTION_KNOX_SKY_FILL * 0.35 * shade * day * near);
+
+    // Rim: edges turning away from the camera catch a little sky and sun light. None on floors
+    // and roofs, which face up.
+    if (OPTION_KNOX_RIM > 0.0 && uInvViewProjection[3][3] != 0.0) {
+        vec4 world = uInvViewProjection * vec4(vUv * 2.0 - 1.0, textureLod(uDepth, vUv, 0.0).r * 2.0 - 1.0, 1.0);
+        vec3 view = normalize(uEye - world.xyz / world.w);
+        // Foliage gets little, or grass and leaves would sparkle.
+        float rim = pow(1.0 - max(dot(n, view), 0.0), 3.0) * (1.0 - up) * (1.0 - 0.8 * foliage);
+        vec3 rimColor = mix(skyColor, sun, 0.5);
+        color = knoxAddLight(color, rimColor * rim * OPTION_KNOX_RIM * 0.3 * mix(0.3, 1.0, day) * near);
+    }
+    return color;
+}
+
 // Linear distance for crack tests; sky counts as very far.
 float knoxCrackDistance(vec2 uv) {
     float d = knoxSceneDistance(uv);
@@ -272,6 +345,11 @@ void main() {
         fragColor = vec4(vUv.x < v ? vec3(1.0, 0.8, 0.1) : vec3(0.1), 1.0);
         return;
     }
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_NORMALS
+    // Surface normals as colour (x red, y green, z blue, mapped from -1..1); a green floor means
+    // the normals are world space with y up.
+    fragColor = vec4(normalize(textureLod(uNormal, vUv, 0.0).rgb + 1.0e-5) * 0.5 + 0.5, 1.0);
+    return;
 #elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_DEPTH
     // Distance on a log scale (1 m dark .. 4 km white); sky is red.
     float dbgDist = knoxSceneDistance(vUv);
@@ -313,6 +391,8 @@ void main() {
         vec3 fogColor = mix(baseFog, vec3(0.025, 0.026, 0.028), night);
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
+
+    color = knoxSurfaceLight(color, night, farness);
 
     // The sky keeps Viewpoint's own colours (sunsets, clouds, stars); only golden hour touches it.
     vec3 ungraded = color;

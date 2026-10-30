@@ -19,6 +19,14 @@ end (`shaders/knox_grade.frag`) that changes the mood, and reshapes Viewpoint's 
 - **Cozy warmth**: a soft warm cast by day, warm lamp and flashlight pools at night, soft highlights
   so skies and pale roads keep detail, and a gentle vignette.
 - **Rain gloom**: flatter, dimmer light in rain.
+- **Bloom**: lamp halos, light spill and a daytime sun glow come from a small bloom pyramid seeded
+  only by the brightest lights (and the sun by day). They're added through a soft shoulder, so glows
+  over bright pixels roll off smoothly instead of clipping.
+- **Surface light** from Viewpoint's G-buffer: sky fill and warm ground bounce in shade, coloured
+  bounce in ambient-occluded corners, and a faint rim light on edges.
+
+Several of these (the soft shoulder, the hue-keeping night lift, the bloom pyramid, sky and ground
+fill, rim light) follow ideas from Mattias's Era project; the code here is written for this pack.
 
 ## Install
 
@@ -37,8 +45,9 @@ Knox Ambience Java mod tells it that packs built on Viewpoint's Default or Vivid
 
 ## Performance
 
-Two passes: a quarter-size glow pass and one full-screen grade pass, plus one small quarter-size
-buffer for the glow. Everything heavy
+A quarter-size glow pass, three tiny downsample passes (1/8, 1/16 and 1/32 size) and one
+full-screen grade pass. Four of the eight render targets Viewpoint allows a pack and its base
+together. Everything heavy
 (shadows, volumetrics, clouds) is Viewpoint's and follows Viewpoint's own quality settings.
 
 ## Why native and not a Minecraft (Iris) pack
