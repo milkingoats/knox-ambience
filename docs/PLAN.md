@@ -57,7 +57,8 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
   **Our pack is native** (decided 2026-10-30): under an Iris pack Viewpoint stops drawing the world
   itself, so a post-only pack shows an empty frame. Native keeps Viewpoint's renderer.
 - **We write our own pack**, not a port of a Minecraft pack (most forbid redistributing changes).
-  Target look: overcast light, fog, dark nights, wet roads, flashlight-lit interiors, muted grading.
+  Target look (Mattias, 2026-10-30): cozy and immersive. Soft warm light, fog, dark nights with warm
+  lamp and flashlight pools, wet roads, no blue night tint.
 - First-person feel is already covered by other add-ons (Immersive Camera Motion, Immersive Effects,
   Equipment Overlays), and so are 3D trees, roofs, HD textures and 3D props. We don't build those;
   see [modlist.md](modlist.md). Remaining add-on ideas: rain on the view, flashlight improvements.

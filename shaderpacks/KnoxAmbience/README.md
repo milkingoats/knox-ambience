@@ -10,15 +10,24 @@ end (`shaders/knox_grade.frag`) that changes the mood:
 - **Rain fog**: extra grey fog while it rains, closer the harder it rains.
 - **Light falloff**: nights darken dim areas harder than lit ones, so lamp and flashlight pools stay
   bright while the street sinks.
-- **Neutral nights**: colour drains out after dusk and the cool day tint fades, so night goes dark,
-  not blue.
-- **Muted grading and rain gloom**: overcast saturation and contrast, flatter light in rain.
+- **Neutral nights**: colour drains out after dusk, so night goes dark, not blue.
+- **Cozy warmth**: a soft warm cast by day, warm lamp and flashlight pools at night, soft highlights
+  so skies and pale roads keep detail, and a gentle vignette.
+- **Rain gloom**: flatter, dimmer light in rain.
 
 ## Install
 
 Copy this folder (`KnoxAmbience`, the one holding `pack.properties`) into
 `Zomboid/viewpoint-shaderpacks/`, restart the game, and pick **Knox Ambience** under
 Delete > Graphics > Shaders. Its options are in the same settings page, next to Viewpoint's.
+
+The settings page also shows "Left out: KnoxAmbience: no shaders folder with shaders.properties or a
+program". That's expected: Viewpoint checks every pack folder for a Minecraft pack too, and ours is
+native. Don't add a `shaders.properties` to silence it, or Viewpoint will also load the folder as a
+Minecraft pack.
+
+Rolling Hills (3815630947) currently turns its hills off under any native pack it doesn't know by
+name, including this one.
 
 ## Performance
 
