@@ -5,6 +5,11 @@
 // fog; this pass only changes the mood on top.
 //
 // - Rain fog: extra grey fog when it rains, pulled closer the harder it rains.
+// - Eye adaptation: a dark view (an unlit room, a night street) is brightened, a bright one is
+//   left alone, like eyes adjusting. Measured from a coarse grid over the screen each frame.
+// - Light spill: bright areas (a lit doorway, a lamp, a window) bleed soft light into the dark
+//   around them on screen, so an unlit room next to a lit one isn't pitch black.
+// - Shadow lift: the darkest values keep a faint floor, so silhouettes stay readable.
 // - Light falloff: night darkens dim pixels harder than lit ones, so lamps and flashlights keep
 //   their pools of light.
 // - Neutral nights: colour drains out after dusk, so night goes dark, not blue.
@@ -22,13 +27,22 @@
 #define OPTION_KNOX_NIGHT_FULL 0.3
 #endif
 #ifndef OPTION_KNOX_NIGHT_DARKNESS
-#define OPTION_KNOX_NIGHT_DARKNESS 0.25
+#define OPTION_KNOX_NIGHT_DARKNESS 0.0
 #endif
 #ifndef OPTION_KNOX_LIGHT_FALLOFF
-#define OPTION_KNOX_LIGHT_FALLOFF 0.6
+#define OPTION_KNOX_LIGHT_FALLOFF 0.0
 #endif
 #ifndef OPTION_KNOX_NIGHT_NEUTRAL
-#define OPTION_KNOX_NIGHT_NEUTRAL 0.7
+#define OPTION_KNOX_NIGHT_NEUTRAL 0.5
+#endif
+#ifndef OPTION_KNOX_ADAPTATION
+#define OPTION_KNOX_ADAPTATION 0.6
+#endif
+#ifndef OPTION_KNOX_LIGHT_SPILL
+#define OPTION_KNOX_LIGHT_SPILL 0.5
+#endif
+#ifndef OPTION_KNOX_SHADOW_LIFT
+#define OPTION_KNOX_SHADOW_LIFT 0.4
 #endif
 #ifndef OPTION_KNOX_SATURATION
 #define OPTION_KNOX_SATURATION 0.9
@@ -112,6 +126,40 @@ float knoxSceneDistance(vec2 uv) {
     return -1.0;
 }
 
+// Average brightness of the view, from a 6 x 4 grid of taps over the middle of the screen.
+// Each tap is capped so one lamp or window in view doesn't count as a bright scene.
+float knoxSceneLuma() {
+    float sum = 0.0;
+    for (int y = 0; y < 4; y++) {
+        for (int x = 0; x < 6; x++) {
+            vec2 uv = vec2(0.12 + 0.152 * float(x), 0.15 + 0.233 * float(y));
+            sum += min(knoxLuma(textureLod(uColor, uv, 0.0).rgb), 0.6);
+        }
+    }
+    return sum / 24.0;
+}
+
+// Light from bright areas nearby on screen: two rings of taps, weighted towards bright pixels,
+// so a lit doorway or lamp casts a soft glow into the dark around it.
+vec3 knoxSpill(vec2 uv) {
+    vec2 size = vec2(textureSize(uColor, 0));
+    vec2 aspect = vec2(size.y / size.x, 1.0);
+    vec3 sum = vec3(0.0);
+    float weight = 0.0;
+    for (int i = 0; i < 8; i++) {
+        float a = float(i) * 0.7853982 + 0.39;
+        vec2 dir = vec2(cos(a), sin(a)) * aspect;
+        for (int r = 0; r < 2; r++) {
+            vec3 c = textureLod(uColor, uv + dir * (r == 0 ? 0.045 : 0.11), 0.0).rgb;
+            float l = knoxLuma(c);
+            float w = smoothstep(0.2, 0.7, l);
+            sum += c * w;
+            weight += 1.0;
+        }
+    }
+    return sum / weight;
+}
+
 // Night amount. Prefer Viewpoint's uNight; if a pass doesn't get it, fall back to the sun
 // being below the horizon. An unset uSunDir (all zero) counts as day.
 float knoxNight() {
@@ -152,6 +200,17 @@ void main() {
         vec3 fogColor = mix(vec3(0.52, 0.54, 0.56), vec3(0.025, 0.026, 0.028), night);
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
+
+    // Eye adaptation: brighten dark views towards a readable level, with a curve that lifts
+    // shadows and mid-tones but leaves highlights where they are.
+    float sceneLuma = knoxSceneLuma();
+    float gain = clamp(0.11 / max(sceneLuma, 0.005), 1.0, 1.0 + 1.6 * OPTION_KNOX_ADAPTATION);
+    color = color * gain / (1.0 + color * (gain - 1.0));
+
+    // Light spill into darker pixels only; strongest at night, gentle by day.
+    vec3 spill = knoxSpill(vUv) * gain;
+    float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
+    color += spill * OPTION_KNOX_LIGHT_SPILL * (0.35 + 0.65 * night) * 0.35 * spillRoom;
 
     // The sky gets half the grade, so Viewpoint's clouds stay soft and pale instead of smudging grey.
     vec3 ungraded = color;
@@ -201,14 +260,13 @@ void main() {
     color *= 1.0 - gloom * 0.4;
 
     // Night with light falloff: dim pixels lose more than lit ones. Pixels that are already
-    // near-black skip the falloff and keep a faint floor, so dark halls stay readable up close.
+    // near-black skip the falloff, so dark halls aren't crushed further.
     float nightLuma = knoxLuma(color);
     float lit = smoothstep(0.05, 0.6, nightLuma);
     float nearBlack = 1.0 - smoothstep(0.0, 0.08, nightLuma);
     float falloff = OPTION_KNOX_LIGHT_FALLOFF * (1.0 - lit) * (1.0 - nearBlack);
     float darken = OPTION_KNOX_NIGHT_DARKNESS * 0.6 * (1.0 + falloff);
     color *= 1.0 - night * clamp(darken, 0.0, 0.95);
-    color += vec3(0.010, 0.010, 0.011) * night * nearBlack;
 
     // Cozy pools: at night, lit pixels lean warm (lamplight, flashlights, windows).
     // Surfaces that are already warm (orange walls, wood) get less, so rooms don't go over-orange.
@@ -219,6 +277,10 @@ void main() {
     // brighter and more golden against the dark.
     float warmLight = smoothstep(0.3, 0.7, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
     color += color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight;
+
+    // Shadow lift: a faint floor under the darkest values that fades out by the low mid-tones.
+    vec3 toe = pow(clamp(1.0 - color, 0.0, 1.0), vec3(8.0));
+    color += toe * 0.035 * OPTION_KNOX_SHADOW_LIFT * vec3(0.97, 1.0, 1.04);
 
     // Gentle vignette to frame the view.
     vec2 v = vUv - 0.5;
