@@ -169,6 +169,11 @@ void main() {
     // purple or blue). Warm light keeps its colour.
     float darkness = 1.0 - smoothstep(0.03, 0.3, knoxLuma(color));
     color = mix(color, vec3(knoxLuma(color)), OPTION_KNOX_NIGHT_NEUTRAL * 0.8 * darkness * (1.0 - warmHue));
+    // Moonlight: at night, blue and purple casts (blue above green) turn a soft silver instead, so
+    // roads and siding read moonlit rather than violet.
+    float coolCast = clamp((color.b - color.g) * 4.0, 0.0, 1.0) * (1.0 - warmHue);
+    vec3 silver = vec3(knoxLuma(color)) * vec3(0.97, 1.0, 1.04);
+    color = mix(color, silver, OPTION_KNOX_NIGHT_NEUTRAL * 0.7 * night * coolCast);
     // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
     // instead of clipping.
     vec3 contrasted = (color - 0.5) * OPTION_KNOX_CONTRAST + 0.5;
