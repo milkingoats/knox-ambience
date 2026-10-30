@@ -365,6 +365,11 @@ void main() {
     dist = filled.w;
     float sky = dist < 0.0 ? 1.0 : 0.0;
     vec2 fogRange = uFogRange.y > uFogRange.x + 1.0 ? uFogRange : vec2(30.0, 300.0);
+    // In fog weather Viewpoint pulls its fog range in to a few metres, and its own fog already
+    // hides the distance. Our distance effects (horizon blend, rain fog, and the fade-outs of
+    // night vision, spill and clarity) keep to a clear-weather range, or the whole view would
+    // count as far away and wash into the sky colour on top of Viewpoint's fog.
+    fogRange = max(fogRange, vec2(40.0, 250.0));
 
     // Horizon blend: distant land takes on the sky colour right above it. At night this pulls the
     // far world down into the dark sky instead of leaving a glowing band.
