@@ -41,6 +41,7 @@ void main() {
     float spill = 0.0;
     vec3 sun = vec3(0.0);
     vec3 lights = vec3(0.0);
+    float skyTaps = 0.0;
     // 4 x 4 bilinear taps cover an 8 x 8 block of full-size pixels around this quarter pixel.
     for (int y = 0; y < 4; y++) {
         for (int x = 0; x < 4; x++) {
@@ -53,9 +54,16 @@ void main() {
             lights += c * smoothstep(0.55, 0.95, l) * clamp((c.r - c.b) * 3.0 + 0.2, 0.0, 1.0);
             // Sun glow: only the brightest sky (the sun and the clouds it lights), never lit walls
             // or roads, so daytime surfaces don't bloom into white blobs.
-            if (l > 0.82 && knoxIsSky(vUv + o)) sun += c * smoothstep(0.82, 0.98, l);
+            if (knoxIsSky(vUv + o)) {
+                skyTaps += 1.0;
+                if (l > 0.82) sun += c * smoothstep(0.82, 0.98, l);
+            }
         }
     }
+    // Real sky fills most of the block. One or two "sky" taps are hairline gaps in floors, walls
+    // and roofs that show the bright background; left in, they bloomed into soft white spots on
+    // the floor that crawled as the camera moved.
+    sun *= smoothstep(5.0, 10.0, skyTaps);
     vec4 now = vec4(mix(sun, lights, knoxNight()) / 16.0, spill / 16.0);
     // Ease towards the new value so flickering pixels (rain, aliasing) settle; short enough that
     // turning the camera doesn't smear.

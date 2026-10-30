@@ -59,8 +59,11 @@ A native pack keeps Viewpoint's renderer and only replaces what it needs.
 
 ## Checking what Viewpoint feeds the pack
 
-Set **Knox debug view** to 1 for bars along the top of the screen (top down: Viewpoint's night,
-the pack's night, rain strength, wetness), or 2 for the depth buffer. Uniforms Viewpoint doesn't
+Set **Knox debug view** to Uniform bars for bars along the top of the screen (top down: Viewpoint's
+night, the pack's night, rain strength, wetness), Depth for the depth buffer, Normals or Occlusion
+for Viewpoint's G-buffer normals and ambient occlusion, or Edges to see in red where the pack
+leaves silhouette edges alone (its surface light reads the G-buffer, which Viewpoint jitters for
+TAA, so applying it on edges made them shimmer). Uniforms Viewpoint doesn't
 set read as 0, which the pack treats as "clear day", so nothing breaks; it just looks plainer.
 
 The pack is written from scratch. It uses Viewpoint's pack format and uniform names, never its code.
