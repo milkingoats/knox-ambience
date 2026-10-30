@@ -124,6 +124,10 @@ void main() {
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
 
+    // The sky gets half the grade, so Viewpoint's clouds stay soft and pale instead of smudging grey.
+    vec3 ungraded = color;
+    float sky = depth >= 0.99999 ? 0.5 : 0.0;
+
     // Muted colour, draining further at night so nights go grey-dark rather than blue.
     // Warm colours (lamps, fire, wood, brick, skin) keep more of their colour than cool ones, so
     // the muting reads as cool outdoors against warm shelter rather than drained.
@@ -145,6 +149,8 @@ void main() {
 
     // Warm cast by day.
     color = mix(color, color * vec3(1.05, 1.0, 0.92), OPTION_KNOX_WARMTH * (1.0 - night));
+
+    color = mix(color, ungraded, sky);
 
     // Rain: flatter, dimmer light.
     color = mix(color, vec3(knoxLuma(color)), OPTION_KNOX_RAIN_GLOOM * rain * 0.5);
