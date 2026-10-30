@@ -63,7 +63,20 @@ Set **Knox debug view** to Uniform bars for bars along the top of the screen (to
 night, the pack's night, rain strength, wetness), Depth for the depth buffer, Normals or Occlusion
 for Viewpoint's G-buffer normals and ambient occlusion, or Edges to see in red where the pack
 leaves silhouette edges alone (its surface light reads the G-buffer, which Viewpoint jitters for
-TAA, so applying it on edges made them shimmer). Uniforms Viewpoint doesn't
+TAA, so applying it on edges made them shimmer).
+
+Four more views answer questions about the input: **Gamma ramp** (two grey ramps along the top;
+the one that looks evenly stepped says whether our values are display values or linear light),
+**Over 1.0** (red where the input is brighter than white, i.e. HDR), **Light buffer** (Viewpoint's
+light buffer as it comes) and **Colourfulness** (a heat map of saturation).
+
+## Grade style
+
+**Classic** is the original grade. **Natural** reworks the colour maths: contrast and saturation
+act on lightness and chroma only, so no hue drifts or clips; one white balance replaces the stacked
+warm tints; the night lift stops before the mid-tones; there is no grey shadow toe or daytime sun
+glow; and night colour is left to Viewpoint's own Night colour shift. Compare both with the
+Default pack in the same spots. Uniforms Viewpoint doesn't
 set read as 0, which the pack treats as "clear day", so nothing breaks; it just looks plainer.
 
 The pack is written from scratch. It uses Viewpoint's pack format and uniform names, never its code.

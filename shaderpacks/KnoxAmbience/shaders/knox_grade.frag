@@ -119,6 +119,28 @@
 #ifndef OPTION_KNOX_DEBUG_EDGES
 #define OPTION_KNOX_DEBUG_EDGES 5
 #endif
+#ifndef OPTION_KNOX_DEBUG_RAMP
+#define OPTION_KNOX_DEBUG_RAMP 6
+#endif
+#ifndef OPTION_KNOX_DEBUG_OVER
+#define OPTION_KNOX_DEBUG_OVER 7
+#endif
+#ifndef OPTION_KNOX_DEBUG_LIGHT
+#define OPTION_KNOX_DEBUG_LIGHT 8
+#endif
+#ifndef OPTION_KNOX_DEBUG_CHROMA
+#define OPTION_KNOX_DEBUG_CHROMA 9
+#endif
+// Grade style, an enum: Classic is the original grade, Natural the reworked colour maths.
+#ifndef OPTION_KNOX_STYLE_CLASSIC
+#define OPTION_KNOX_STYLE_CLASSIC 0
+#endif
+#ifndef OPTION_KNOX_STYLE_NATURAL
+#define OPTION_KNOX_STYLE_NATURAL 1
+#endif
+#ifndef OPTION_KNOX_STYLE
+#define OPTION_KNOX_STYLE OPTION_KNOX_STYLE_CLASSIC
+#endif
 #ifndef OPTION_KNOX_DEBUG
 #define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
 #endif
@@ -135,6 +157,7 @@ uniform sampler2D uKnoxBloom32;
 uniform sampler2D uNormal;    // Viewpoint's G-buffer: surface normal in rgb (world space, y up)
 uniform sampler2D uAlbedo;    // Viewpoint's G-buffer: surface colour in rgb
 uniform sampler2D uOcclusion; // Viewpoint's ambient occlusion: a = 1 open .. 0 fully occluded
+uniform sampler2D uLight;     // Viewpoint's light buffer (debug view only so far)
 uniform mat4 uInvViewProjection;
 uniform vec3 uEye;            // camera position, world space
 uniform vec3 uSunColor;
@@ -393,6 +416,34 @@ void main() {
     float dbgFlat = knoxFlatness(knoxSceneDistance(vUv));
     fragColor = vec4(mix(vec3(1.0, 0.1, 0.1), vec3(knoxLuma(color)), dbgFlat), 1.0);
     return;
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_RAMP
+    // Two 16-step grey ramps along the top. Upper: plain values. Lower: the same values decoded
+    // with gamma 2.2. Whichever looks evenly stepped tells how our output reaches the screen: the
+    // upper one means our values are display values; the lower one means the screen encodes them
+    // (linear light).
+    if (vUv.y > 0.86) {
+        float t = floor(vUv.x * 16.0) / 15.0;
+        float v = vUv.y > 0.93 ? t : pow(t, 2.2);
+        fragColor = vec4(vec3(v), 1.0);
+        return;
+    }
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_OVER
+    // Channels above 1.0 in red (the input is HDR there), the rest greyed.
+    float dbgPeak = max(max(color.r, color.g), color.b);
+    fragColor = vec4(dbgPeak > 1.0 ? vec3(1.0, 0.1, 0.1) : vec3(knoxLuma(color) * 0.6), 1.0);
+    return;
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_LIGHT
+    // Viewpoint's light buffer as it comes.
+    fragColor = vec4(textureLod(uLight, vUv, 0.0).rgb, 1.0);
+    return;
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_CHROMA
+    // Colourfulness of the input: black grey, blue mild, yellow strong, red very strong.
+    float dbgChroma = max(max(color.r, color.g), color.b) - min(min(color.r, color.g), color.b);
+    vec3 dbgHeat = dbgChroma < 0.15 ? mix(vec3(0.0), vec3(0.1, 0.3, 1.0), dbgChroma / 0.15)
+                 : dbgChroma < 0.35 ? mix(vec3(0.1, 0.3, 1.0), vec3(1.0, 0.9, 0.1), (dbgChroma - 0.15) / 0.2)
+                                    : mix(vec3(1.0, 0.9, 0.1), vec3(1.0, 0.1, 0.1), clamp((dbgChroma - 0.35) / 0.3, 0.0, 1.0));
+    fragColor = vec4(dbgHeat, 1.0);
+    return;
 #endif
 
     float dist = knoxSceneDistance(vUv);
@@ -438,10 +489,130 @@ void main() {
     // Surface light fills shade; in rain and wet weather the sky is a flat grey, so filling with
     // it only greys the shadows. Keep most of it for clear weather.
     float wetEase = 1.0 - 0.7 * clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
-    color = mix(color, knoxSurfaceLight(color, night, farness, knoxFlatness(dist)), wetEase);
+    float flatness = knoxFlatness(dist);
+    color = mix(color, knoxSurfaceLight(color, night, farness, flatness), wetEase);
 
     // The sky keeps Viewpoint's own colours (sunsets, clouds, stars); only golden hour touches it.
     vec3 ungraded = color;
+
+#if OPTION_KNOX_STYLE == OPTION_KNOX_STYLE_NATURAL
+    // Natural grade. Viewpoint has already tone-mapped, graded, bloomed and night-shifted this
+    // image (its Purkinje step, set by nightColour), so this grade starts from identity and only
+    // nudges. Rules: contrast and saturation act on lightness and chroma, never per channel, so
+    // hues can't drift or clip; warmth is one white balance; nothing adds a grey veil.
+    float muted = clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
+    float golden = knoxGoldenHour() * OPTION_KNOX_GOLDEN_HOUR * (1.0 - 0.7 * muted);
+
+    // Night vision, capped: lifts the darks and fades out by the mid-tones, so nights don't read
+    // bright.
+    {
+        float l = knoxLuma(color);
+        float gain = 1.0 + 1.4 * OPTION_KNOX_ADAPTATION * night * (1.0 - farness);
+        color = mix(color, knoxLift(color, gain), smoothstep(0.015, 0.12, l) * (1.0 - smoothstep(0.25, 0.5, l)));
+    }
+
+    // Glow: lamp light spills into the dark around it and the brightest lights get a halo. Night
+    // only, and weaker than Classic: Viewpoint already mixes in its own bloom haze, and there is
+    // no daytime sun glow (Viewpoint has sun shafts).
+    vec4 bloom4 = knoxTent(uKnoxGlow, vUv);
+    vec4 bloom8 = knoxTent(uKnoxBloom8, vUv);
+    vec4 bloom16 = knoxTent(uKnoxBloom16, vUv);
+    vec4 bloom32 = knoxTent(uKnoxBloom32, vUv);
+    {
+        vec3 spill = (bloom8.a * 0.5 + bloom16.a * 0.35 + bloom32.a * 0.15) * vec3(1.0, 0.86, 0.68) * 1.6;
+        vec3 halo = bloom4.rgb * 0.45 + bloom8.rgb * 0.3 + bloom16.rgb * 0.17 + bloom32.rgb * 0.08;
+        float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
+        color = knoxAddLight(color, spill * OPTION_KNOX_LIGHT_SPILL * night * 0.3 * spillRoom * (1.0 - farness)
+                                  + halo * OPTION_KNOX_LAMP_HALO * night * 0.35);
+    }
+
+    // Clarity, as in Classic.
+    {
+        vec2 t = 2.0 / vec2(textureSize(uColor, 0));
+        vec3 blur = (textureLod(uColor, vUv + vec2(t.x, 0.0), 0.0).rgb
+                   + textureLod(uColor, vUv - vec2(t.x, 0.0), 0.0).rgb
+                   + textureLod(uColor, vUv + vec2(0.0, t.y), 0.0).rgb
+                   + textureLod(uColor, vUv - vec2(0.0, t.y), 0.0).rgb) * 0.25;
+        float detail = knoxLuma(texture(uColor, vUv).rgb) - knoxLuma(blur);
+        color += clamp(detail, -0.08, 0.08) * OPTION_KNOX_CLARITY * (1.0 - 0.7 * night) * (1.0 - farness);
+    }
+
+    // Contrast on lightness only, as a power curve around mid-grey on screen (0.45): darks go
+    // darker without any channel clipping to zero, and the hue stays put. Eased off towards white.
+    {
+        float l = max(knoxLuma(color), 1.0e-4);
+        float k = OPTION_KNOX_CONTRAST + (0.06 * night + 0.05 * muted) * (1.0 - sky);
+        float curved = 0.45 * pow(l / 0.45, k);
+        curved = mix(curved, l, smoothstep(0.6, 0.95, l));
+        color *= curved / l;
+    }
+
+    // Saturation by tone, the same for every hue: a touch above 1 in the mid-tones on a clear
+    // day, Knox saturation in the rain, and less in deep shadow and near white, where real
+    // colour fades. Never more than 10% above the input.
+    {
+        float l = knoxLuma(color);
+        float sat = mix(1.04, OPTION_KNOX_SATURATION, muted);
+        sat *= mix(0.85, 1.0, smoothstep(0.02, 0.18, l)) * mix(1.0, 0.85, smoothstep(0.75, 0.98, l));
+        color = mix(vec3(l), color, min(sat, 1.1));
+    }
+
+    // Highlight shoulder, as in Classic, on lightness.
+    {
+        float hl = knoxLuma(color);
+        if (hl > 0.7) {
+            float target = 0.7 + (hl - 0.7) / (1.0 + (hl - 0.7) * OPTION_KNOX_HIGHLIGHTS * 4.0);
+            color *= target / hl;
+        }
+    }
+
+    // One white balance instead of stacked warm tints: a little warm by day, warm and rosy at
+    // golden hour, a little cool in rain, neutral at night (lamps keep their own colour). Scaled
+    // to keep brightness, so it reads as the light's colour, not a filter.
+    {
+        float warm = OPTION_KNOX_WARMTH / 0.35;
+        vec3 wb = vec3(1.0 + 0.035 * warm, 1.0, 1.0 - 0.05 * warm);
+        wb = mix(wb, vec3(1.10, 0.98, 0.86), clamp(golden, 0.0, 1.0));
+        wb = mix(wb, vec3(0.97, 1.0, 1.04), muted);
+        wb = mix(wb, vec3(1.0), night);
+        wb /= knoxLuma(wb);
+        color *= wb;
+    }
+
+    // Lamp cores at night go towards white, keeping their warm colour in the falloff, as real
+    // incandescent light looks.
+    {
+        float l = knoxLuma(color);
+        color = mix(color, vec3(l) * vec3(1.03, 0.99, 0.93), smoothstep(0.7, 0.95, l) * 0.5 * night);
+    }
+
+    color = mix(color, ungraded, sky);
+
+    // Golden hour on the sky only: a rose glow strongest near the horizon.
+    if (golden > 0.0 && sky > 0.5) {
+        vec3 skyGlow = color * vec3(1.22, 0.9, 0.86) + vec3(0.04, 0.012, 0.0);
+        color = mix(color, skyGlow, smoothstep(0.95, 0.35, vUv.y) * golden);
+    }
+
+    // Rain: dimmer light, as in Classic.
+    {
+        float outside = sky > 0.5 ? 1.0 : smoothstep(3.0, 15.0, dist);
+        float gloom = OPTION_KNOX_RAIN_GLOOM * smoothstep(0.0, 0.25, rainNow) * outside
+                    * smoothstep(0.03, 0.35, knoxLuma(color));
+        color *= 1.0 - gloom * 0.3;
+    }
+
+    // Optional extra night darkness (off by default).
+    color *= 1.0 - night * clamp(OPTION_KNOX_NIGHT_DARKNESS * 0.6, 0.0, 0.95);
+
+    // Never black, without a grey veil: a floor of the surface's own colour under a faint cool
+    // ambient, so dark materials stay darker than light ones. Near world only.
+    if (sky < 0.5 && flatness > 0.0) {
+        vec3 albedo = textureLod(uAlbedo, vUv, 0.0).rgb;
+        vec3 floorLight = albedo * vec3(0.020, 0.023, 0.030) * (OPTION_KNOX_SHADOW_LIFT / 0.2);
+        color = max(color, floorLight * flatness * (1.0 - farness));
+    }
+#else
 
     // Night vision: lift shadows and mid-tones at night with a curve that leaves highlights alone,
     // so lamps keep their punch. Depends only on the time of day, so it's steady frame to frame,
@@ -582,6 +753,8 @@ void main() {
     // Shadow lift: a faint floor under the darkest values that fades out by the low mid-tones.
     vec3 toe = pow(clamp(1.0 - color, 0.0, 1.0), vec3(8.0));
     color += toe * 0.035 * OPTION_KNOX_SHADOW_LIFT * vec3(0.97, 1.0, 1.04) * (1.0 - sky) * (1.0 - farness);
+
+#endif
 
     // Gentle vignette to frame the view.
     vec2 v = vUv - 0.5;
