@@ -68,6 +68,7 @@ uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
 uniform vec3 uSunDir;         // unit vector, y up
 uniform float uNight;         // 0 day .. 1 night
 uniform float uRainStrength;  // 0 .. 1
+uniform float uRain;          // 0 .. 1, the name Viewpoint's weather shaders use
 uniform float uWet;           // 0 .. 1, lags behind rain
 
 in vec2 vUv;
@@ -115,12 +116,13 @@ float knoxNight() {
 void main() {
     vec3 color = texture(uColor, vUv).rgb;
     float night = knoxNight();
-    float rain = clamp(max(uRainStrength, uWet * 0.5), 0.0, 1.0);
+    float rainNow = max(uRainStrength, uRain);
+    float rain = clamp(max(rainNow, uWet * 0.5), 0.0, 1.0);
 
 #if OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_BARS
-    // Bars along the top, from the top down: uNight, sun-based night, uRainStrength, uWet.
+    // Bars along the top, from the top down: uNight, the pack's night, rain (uRainStrength or uRain), uWet.
     if (vUv.y > 0.88) {
-        float v = vUv.y > 0.97 ? uNight : vUv.y > 0.94 ? knoxNight() : vUv.y > 0.91 ? uRainStrength : uWet;
+        float v = vUv.y > 0.97 ? uNight : vUv.y > 0.94 ? knoxNight() : vUv.y > 0.91 ? rainNow : uWet;
         fragColor = vec4(vUv.x < v ? vec3(1.0, 0.8, 0.1) : vec3(0.1), 1.0);
         return;
     }
@@ -176,9 +178,11 @@ void main() {
 
     color = mix(color, ungraded, sky);
 
-    // Rain: flatter, dimmer light.
-    color = mix(color, vec3(knoxLuma(color)), OPTION_KNOX_RAIN_GLOOM * rain * 0.5);
-    color *= 1.0 - OPTION_KNOX_RAIN_GLOOM * rain * 0.4;
+    // Rain: flatter, dimmer light. Eased off where the scene is already dark, so stormy nights
+    // aren't dimmed twice.
+    float gloom = OPTION_KNOX_RAIN_GLOOM * rain * smoothstep(0.03, 0.35, knoxLuma(color));
+    color = mix(color, vec3(knoxLuma(color)), gloom * 0.5);
+    color *= 1.0 - gloom * 0.4;
 
     // Night with light falloff: dim pixels lose more than lit ones.
     float lit = smoothstep(0.05, 0.6, knoxLuma(color));
