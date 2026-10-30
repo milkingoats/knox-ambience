@@ -4,6 +4,9 @@
 // mapping, on the display-ready image. Viewpoint keeps all of its lighting, shadows, clouds and
 // fog; this pass changes the mood on top. In order:
 //
+// - Crack fill: hairline gaps in the geometry (where a ceiling meets a wall, or roof pieces meet)
+//   let the far background or sky show through as a thin jagged line. A pixel that is much
+//   further away than the pixels on both sides of it is filled from them.
 // - Horizon blend: distant land fades into the actual sky colour just above it, read from the
 //   frame itself, so the far world melts into a sunset by day and into the dark sky at night,
 //   instead of standing out as a pale fog wall.
@@ -206,6 +209,34 @@ vec3 knoxSpill(vec2 uv, out vec3 halo) {
     return spill / 24.0;
 }
 
+// Linear distance for crack tests; sky counts as very far.
+float knoxCrackDistance(vec2 uv) {
+    float d = knoxSceneDistance(uv);
+    return d < 0.0 ? 1.0e6 : d;
+}
+
+// Fills one- and two-pixel cracks: if this pixel is much further away than both neighbours on
+// either side (left/right or above/below) and those neighbours agree with each other, it's a gap
+// in a surface, so take their colour. Returns the colour, and the surface distance in w (or the
+// original distance when nothing was filled).
+vec4 knoxFillCracks(vec3 color, float dist) {
+    float centre = dist < 0.0 ? 1.0e6 : dist;
+    vec2 texel = 1.0 / vec2(textureSize(uColor, 0));
+    for (int s = 1; s <= 2; s++) {
+        for (int axis = 0; axis < 2; axis++) {
+            vec2 o = axis == 0 ? vec2(texel.x * float(s), 0.0) : vec2(0.0, texel.y * float(s));
+            float a = knoxCrackDistance(vUv + o);
+            float b = knoxCrackDistance(vUv - o);
+            float near = max(a, b);
+            if (near < 200.0 && centre > near * 1.25 + 0.5 && abs(a - b) < 0.15 * near + 0.3) {
+                vec3 fill = 0.5 * (textureLod(uColor, vUv + o, 0.0).rgb + textureLod(uColor, vUv - o, 0.0).rgb);
+                return vec4(fill, 0.5 * (a + b));
+            }
+        }
+    }
+    return vec4(color, dist);
+}
+
 void main() {
     vec3 color = texture(uColor, vUv).rgb;
     float night = knoxNight();
@@ -227,6 +258,11 @@ void main() {
 #endif
 
     float dist = knoxSceneDistance(vUv);
+
+    // Crack fill, before anything reads this pixel's colour or distance.
+    vec4 filled = knoxFillCracks(color, dist);
+    color = filled.rgb;
+    dist = filled.w;
     float sky = dist < 0.0 ? 1.0 : 0.0;
     vec2 fogRange = uFogRange.y > uFogRange.x + 1.0 ? uFogRange : vec2(30.0, 300.0);
 
