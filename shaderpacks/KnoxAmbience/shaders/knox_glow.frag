@@ -22,7 +22,7 @@ uniform float uPreviousValid;         // 0 on the first frame or after a reset
 #define OPTION_KNOX_STYLE_NATURAL 1
 #endif
 #ifndef OPTION_KNOX_STYLE
-#define OPTION_KNOX_STYLE 0
+#define OPTION_KNOX_STYLE 1
 #endif
 
 in vec2 vUv;
