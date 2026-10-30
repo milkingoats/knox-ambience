@@ -60,6 +60,7 @@ public final class Patch_WorldStreamer_threadLoop {
                 if (left <= 0) break;
                 LOCK.wait(left / 1_000_000L, (int) (left % 1_000_000L));
             }
+            if (wakeRequested) FrameLog.mark("stream.wake");
             // Use up the request. A request that came in while the thread was busy also ends up
             // here: the next sleep returns at once, because new work is waiting.
             wakeRequested = false;

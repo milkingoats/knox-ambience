@@ -33,17 +33,22 @@ public class Patch_ChunkSaveWorker_HotsaveAncilliarySystems {
     /** Returns true to skip the stock method (ZombieBuddy skipOn). */
     @Patch.OnEnter(skipOn = true)
     public static boolean enter() {
-        if (!Main.hotsaveThrottle) return false;
+        if (!Main.hotsaveThrottle) {
+            FrameLog.mark("save.hotsave");
+            return false;
+        }
         if (!seen) seen = Main.once("hot save throttle (30 s)");
 
         long now = System.nanoTime();
         if (ranOnce && now - lastRunNs < MIN_INTERVAL_NS) {
             pending = true;  // too soon: run it later
+            FrameLog.mark("save.hotsave.deferred");
             return true;
         }
         ranOnce = true;
         lastRunNs = now;
         pending = false;
+        FrameLog.mark("save.hotsave");
         return false;        // run the stock hot save now
     }
 

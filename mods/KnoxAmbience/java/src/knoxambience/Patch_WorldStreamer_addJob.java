@@ -14,6 +14,7 @@ public class Patch_WorldStreamer_addJob {
 
     @Patch.OnExit
     public static void exit() {
+        FrameLog.mark("stream.request");
         if (!Main.streamerWake) return;
         if (!seen) seen = Main.once("addJob -> streamer wake");
         Patch_WorldStreamer_threadLoop.wake();
