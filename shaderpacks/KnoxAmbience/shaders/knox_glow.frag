@@ -4,9 +4,15 @@
 // eased over a few frames. The grade reads it for light spill and lamp halos, so they come from
 // smooth, steady light instead of single pixels that shimmer as the camera moves.
 //
-// rgb: colour of clearly lit areas (spill). a: brightness of the very brightest lights (halos).
+// rgb: at night, colour of clearly lit areas (spill); by day, the bright sky around the sun (sun
+// glow). a: brightness of the very brightest lights (halos).
 
 uniform sampler2D uColor;
+uniform sampler2D uDepth;             // 1 = sky or distant world
+uniform sampler2D uFarDepth;          // Viewpoint's distant world
+uniform vec2 uFarRange;               // x <= 0 when the distant world is off
+uniform vec3 uSunDir;                 // unit vector, y up
+uniform float uNight;                 // 0 day .. about 0.3 full night
 uniform sampler2D uKnoxGlowPrevious;  // this target's last frame
 uniform float uPreviousValid;         // 0 on the first frame or after a reset
 
@@ -17,9 +23,21 @@ float knoxLuma(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
+bool knoxIsSky(vec2 uv) {
+    if (textureLod(uDepth, uv, 0.0).r < 1.0) return false;
+    return uFarRange.x <= 0.0 || textureLod(uFarDepth, uv, 0.0).r >= 1.0;
+}
+
+// Same night amount as the grade (knox_grade.frag knoxNight), with its default full-night level.
+float knoxNight() {
+    float fromSun = length(uSunDir) > 0.5 ? 1.0 - smoothstep(-0.12, 0.08, uSunDir.y) : 0.0;
+    return clamp(max(smoothstep(0.0, 0.3, uNight), fromSun), 0.0, 1.0);
+}
+
 void main() {
     vec2 texel = 1.0 / vec2(textureSize(uColor, 0));
     vec3 spill = vec3(0.0);
+    vec3 sun = vec3(0.0);
     float halo = 0.0;
     // 4 x 4 bilinear taps cover an 8 x 8 block of full-size pixels around this quarter pixel.
     for (int y = 0; y < 4; y++) {
@@ -31,9 +49,12 @@ void main() {
             // night turns hazy.
             spill += c * smoothstep(0.4, 0.85, l) * clamp((c.r - c.b) * 3.0 + 0.4, 0.0, 1.0);
             halo += smoothstep(0.55, 0.95, l) * clamp((c.r - c.b) * 3.0 + 0.2, 0.0, 1.0);
+            // Sun glow: only the brightest sky (the sun and the clouds it lights), never lit walls
+            // or roads, so daytime surfaces don't bloom into white blobs.
+            if (l > 0.82 && knoxIsSky(vUv + o)) sun += c * smoothstep(0.82, 0.98, l);
         }
     }
-    vec4 now = vec4(spill / 16.0, halo / 16.0);
+    vec4 now = vec4(mix(sun, spill, knoxNight()) / 16.0, halo / 16.0);
     // Ease towards the new value so flickering pixels (rain, aliasing) settle; short enough that
     // turning the camera doesn't smear.
     vec4 previous = textureLod(uKnoxGlowPrevious, vUv, 0.0);
