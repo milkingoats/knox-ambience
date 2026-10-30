@@ -5,8 +5,9 @@
 //
 // Viewpoint's fog colour, range and haze settings are unchanged. Only the shape changes:
 // - it fades in gently from the fog start instead of ramping linearly into a solid wall;
-// - it never reaches full strength, so skylines and distant buildings stay readable as soft
-//   silhouettes;
+// - in clear weather it never reaches full strength, so skylines and distant buildings stay
+//   readable as soft silhouettes; in fog weather (Viewpoint pulls the fog end in close) it does,
+//   so the far tree line melts into the fog instead of standing out as dark cut-outs;
 // - height haze is lighter.
 //
 // Declares no uniforms: this file is included by shaders that declare their own.
@@ -27,7 +28,10 @@ float fogAt(float d, vec2 range) {
     float t = max(d - range.x, 0.0) / span;
     // Ease in (quadratic), then approach the cap smoothly past the fog end.
     float f = 1.0 - exp(-2.2 * t * t);
-    return f * clamp(OPTION_KNOX_FOG_STRENGTH, 0.0, 1.0);
+    // The cap only applies to clear-weather ranges: with the fog end under about 120 m it's fog
+    // weather, and a capped fog left a quarter of every distant tree's dark colour showing.
+    float cap = mix(1.0, clamp(OPTION_KNOX_FOG_STRENGTH, 0.0, 1.0), smoothstep(120.0, 300.0, range.y));
+    return f * cap;
 }
 
 // h: distance from the eye. haze.x: Viewpoint's haze distance scale, haze.y: where haze starts.
