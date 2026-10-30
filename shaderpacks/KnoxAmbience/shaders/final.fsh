@@ -12,14 +12,13 @@ uniform float sunAngle;
 uniform float rainStrength;
 uniform float wetness;
 
-in vec2 texcoord;
-
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    vec3 color = texture(colortex0, texcoord).rgb;
+    vec3 color = texelFetch(colortex0, ivec2(gl_FragCoord.xy), 0).rgb;
 
 #if DEBUG_VIEW == 2
+    vec2 texcoord = gl_FragCoord.xy / vec2(textureSize(colortex0, 0));
     if (texcoord.y > 0.9) {
         float v = texcoord.y > 0.966 ? sunAngle : texcoord.y > 0.933 ? rainStrength : wetness;
         color = texcoord.x < v ? vec3(1.0, 0.8, 0.1) : vec3(0.1);

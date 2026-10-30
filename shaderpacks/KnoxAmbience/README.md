@@ -52,4 +52,9 @@ To check, set **Debug > Debug view**:
   top to bottom. `sunAngle` should creep along with the time of day and pass halfway at dusk; the
   rain bars should grow when it rains. A bar stuck at zero means Viewpoint doesn't set that uniform.
 
-Untested in game. The shaders compile with glslangValidator (all debug modes, fog on and off).
+Passes read pixels with `texelFetch` at `gl_FragCoord`, not interpolated texture coordinates:
+Viewpoint doesn't fill `gl_TextureMatrix` for full-screen passes, so `ftransform`-style texcoords
+made every pixel read one corner texel (a flat blue screen). This assumes the buffers are
+screen-sized; if Viewpoint ever renders at a lower resolution, sample with a scaled UV instead.
+
+First in-game run (2026-10-30) found that bug; the fix is untested. The shaders compile with glslangValidator (all debug modes, fog on and off).

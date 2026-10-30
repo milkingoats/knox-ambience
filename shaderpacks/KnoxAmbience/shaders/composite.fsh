@@ -15,8 +15,6 @@ uniform float sunAngle;
 uniform float rainStrength; // 0-1, follows the weather directly
 uniform float wetness;      // 0-1, lags behind rain
 
-in vec2 texcoord;
-
 /* RENDERTARGETS: 0 */
 layout(location = 0) out vec4 outColor;
 
@@ -26,8 +24,9 @@ float linearDepth(float d) {
 }
 
 void main() {
-    vec3 color = texture(colortex0, texcoord).rgb;
-    float depth = texture(depthtex0, texcoord).r;
+    ivec2 px = ivec2(gl_FragCoord.xy);
+    vec3 color = texelFetch(colortex0, px, 0).rgb;
+    float depth = texelFetch(depthtex0, px, 0).r;
 
 #if DEBUG_VIEW == 1
     outColor = vec4(vec3(linearDepth(depth) / far), 1.0);
