@@ -18,6 +18,13 @@ uniform float uNight;                 // 0 day .. about 0.3 full night
 uniform sampler2D uKnoxGlowPrevious;  // this target's last frame
 uniform float uPreviousValid;         // 0 on the first frame or after a reset
 
+#ifndef OPTION_KNOX_STYLE_NATURAL
+#define OPTION_KNOX_STYLE_NATURAL 1
+#endif
+#ifndef OPTION_KNOX_STYLE
+#define OPTION_KNOX_STYLE 0
+#endif
+
 in vec2 vUv;
 out vec4 fragColor;
 
@@ -50,8 +57,14 @@ void main() {
             float l = knoxLuma(c);
             // Only real light sources and lit surfaces spill; moonlit roads and pale walls don't, or the
             // night turns hazy.
+#if OPTION_KNOX_STYLE == OPTION_KNOX_STYLE_NATURAL
+            // Natural: by brightness only, whatever the light's colour.
+            spill += l * smoothstep(0.5, 0.9, l);
+            lights += c * smoothstep(0.6, 0.95, l);
+#else
             spill += l * smoothstep(0.4, 0.85, l) * clamp((c.r - c.b) * 3.0 + 0.4, 0.0, 1.0);
             lights += c * smoothstep(0.55, 0.95, l) * clamp((c.r - c.b) * 3.0 + 0.2, 0.0, 1.0);
+#endif
             // Sun glow: only the brightest sky (the sun and the clouds it lights), never lit walls
             // or roads, so daytime surfaces don't bloom into white blobs.
             if (knoxIsSky(vUv + o)) {
