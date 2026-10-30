@@ -27,7 +27,9 @@ void main() {
             vec2 o = (vec2(float(x), float(y)) - 1.5) * 2.0 * texel;
             vec3 c = textureLod(uColor, vUv + o, 0.0).rgb;
             float l = knoxLuma(c);
-            spill += c * smoothstep(0.25, 0.75, l);
+            // Only real light sources and lit surfaces spill; moonlit roads and pale walls don't, or the
+            // night turns hazy.
+            spill += c * smoothstep(0.4, 0.85, l) * clamp((c.r - c.b) * 3.0 + 0.4, 0.0, 1.0);
             halo += smoothstep(0.55, 0.95, l);
         }
     }

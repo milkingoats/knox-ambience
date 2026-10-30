@@ -35,7 +35,7 @@
 #define OPTION_KNOX_NIGHT_FULL 0.3
 #endif
 #ifndef OPTION_KNOX_ADAPTATION
-#define OPTION_KNOX_ADAPTATION 0.6
+#define OPTION_KNOX_ADAPTATION 0.35
 #endif
 #ifndef OPTION_KNOX_LIGHT_SPILL
 #define OPTION_KNOX_LIGHT_SPILL 0.5
@@ -44,7 +44,7 @@
 #define OPTION_KNOX_LAMP_HALO 0.5
 #endif
 #ifndef OPTION_KNOX_SHADOW_LIFT
-#define OPTION_KNOX_SHADOW_LIFT 0.4
+#define OPTION_KNOX_SHADOW_LIFT 0.2
 #endif
 #ifndef OPTION_KNOX_CLARITY
 #define OPTION_KNOX_CLARITY 0.3
@@ -297,8 +297,11 @@ void main() {
     // Night vision: lift shadows and mid-tones at night with a curve that leaves highlights alone,
     // so lamps keep their punch. Depends only on the time of day, so it's steady frame to frame,
     // and fades out with distance so the far world stays sunk into the night sky.
+    // The deepest darks are kept out of the lift, so night keeps its contrast instead of turning
+    // into a milky haze.
     float gain = 1.0 + 1.4 * OPTION_KNOX_ADAPTATION * night * (1.0 - farness);
-    color = color * gain / (1.0 + color * (gain - 1.0));
+    vec3 lifted = color * gain / (1.0 + color * (gain - 1.0));
+    color = mix(color, lifted, smoothstep(0.015, 0.12, knoxLuma(color)));
 
     // Light spill into darker pixels, and warm halos around the brightest lights.
     vec3 halo;
@@ -338,11 +341,13 @@ void main() {
     // roads and siding read moonlit rather than violet or lavender.
     float coolCast = clamp(max(color.b - color.g, color.r - color.g) * 4.0, 0.0, 1.0) * (1.0 - warmHue);
     vec3 silver = vec3(knoxLuma(color)) * vec3(0.97, 1.0, 1.04);
-    color = mix(color, silver, OPTION_KNOX_NIGHT_NEUTRAL * 0.8 * night * coolCast);
+    color = mix(color, silver, min(OPTION_KNOX_NIGHT_NEUTRAL * 1.6, 1.0) * night * coolCast);
 
     // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
     // instead of clipping.
-    vec3 contrasted = (color - 0.5) * OPTION_KNOX_CONTRAST + 0.5;
+    // A little extra at night outdoors, so moonlit scenes keep deep shadows rather than going flat.
+    float contrast = OPTION_KNOX_CONTRAST + 0.12 * night * (1.0 - sky);
+    vec3 contrasted = (color - 0.5) * contrast + 0.5;
     color = mix(contrasted, color, smoothstep(0.6, 0.95, knoxLuma(color)));
 
     // Gentle highlight shoulder: compress the top end so overcast light reads soft, not bleached.
