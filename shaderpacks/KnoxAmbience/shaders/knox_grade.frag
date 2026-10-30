@@ -9,6 +9,9 @@
 //   left alone, like eyes adjusting. Measured from a coarse grid over the screen each frame.
 // - Light spill: bright areas (a lit doorway, a lamp, a window) bleed soft light into the dark
 //   around them on screen, so an unlit room next to a lit one isn't pitch black.
+// - Golden hour: when the sun is low, the sky and sunlit surfaces turn rose-gold while shadows
+//   stay a deep cool green-blue, for warm dusk and dawn light.
+// - Split tone: shadows lean slightly cool, light leans warm, in every condition.
 // - Shadow lift: the darkest values keep a faint floor, so silhouettes stay readable.
 // - Light falloff: night darkens dim pixels harder than lit ones, so lamps and flashlights keep
 //   their pools of light.
@@ -34,6 +37,9 @@
 #endif
 #ifndef OPTION_KNOX_NIGHT_NEUTRAL
 #define OPTION_KNOX_NIGHT_NEUTRAL 0.5
+#endif
+#ifndef OPTION_KNOX_GOLDEN_HOUR
+#define OPTION_KNOX_GOLDEN_HOUR 0.6
 #endif
 #ifndef OPTION_KNOX_ADAPTATION
 #define OPTION_KNOX_ADAPTATION 0.6
@@ -85,6 +91,7 @@ uniform sampler2D uFarDepth;  // Viewpoint's distant world (far terrain, shells,
 uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
+uniform vec3 uFogColor;       // Viewpoint's fog colour (follows the sky); 0 if not set
 uniform vec3 uSunDir;         // unit vector, y up
 uniform float uNight;         // 0 day .. about 0.3 full night
 uniform float uRainStrength;  // 0 .. 1
@@ -169,6 +176,13 @@ float knoxNight() {
     return clamp(max(fromViewpoint, fromSun), 0.0, 1.0);
 }
 
+// How much of a golden hour it is: the sun near the horizon, on either side of sunrise or sunset.
+float knoxGoldenHour() {
+    if (length(uSunDir) < 0.5) return 0.0;
+    float y = uSunDir.y;
+    return smoothstep(-0.08, 0.04, y) * (1.0 - smoothstep(0.12, 0.4, y));
+}
+
 void main() {
     vec3 color = texture(uColor, vUv).rgb;
     float night = knoxNight();
@@ -197,7 +211,10 @@ void main() {
         float start = range.x * (1.0 - 0.7 * rain);
         float t = max(dist - start, 0.0) / (range.y - start);
         float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.6;
-        vec3 fogColor = mix(vec3(0.52, 0.54, 0.56), vec3(0.025, 0.026, 0.028), night);
+        // Viewpoint's own fog colour when we get it, so rain fog matches the sky; grey otherwise.
+        vec3 baseFog = dot(uFogColor, vec3(1.0)) > 0.03 ? mix(uFogColor, vec3(knoxLuma(uFogColor)), 0.3)
+                                                         : vec3(0.52, 0.54, 0.56);
+        vec3 fogColor = mix(baseFog, vec3(0.025, 0.026, 0.028), night);
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
 
@@ -212,15 +229,19 @@ void main() {
     float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
     color += spill * OPTION_KNOX_LIGHT_SPILL * (0.35 + 0.65 * night) * 0.35 * spillRoom;
 
-    // The sky gets half the grade, so Viewpoint's clouds stay soft and pale instead of smudging grey.
+    // The sky keeps Viewpoint's own colours (sunsets, clouds); only golden hour touches it below.
     vec3 ungraded = color;
-    float sky = dist < 0.0 ? 0.5 : 0.0;
+    float sky = dist < 0.0 ? 1.0 : 0.0;
+
+    // Weather-driven mood: clear weather keeps full colour, rain and wet weather fade towards the
+    // muted Knox look.
+    float muted = clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
 
     // Muted colour, draining further at night so nights go grey-dark rather than blue.
     // Warm colours (lamps, fire, wood, brick, skin) keep more of their colour than cool ones, so
     // the muting reads as cool outdoors against warm shelter rather than drained.
     float warmHue = clamp((color.r - color.b) * 3.0, 0.0, 1.0);
-    float sat = OPTION_KNOX_SATURATION * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
+    float sat = mix(1.02, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
     sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH);
     color = mix(vec3(knoxLuma(color)), color, sat);
 
@@ -248,7 +269,27 @@ void main() {
     // Warm cast by day.
     color = mix(color, color * vec3(1.05, 1.0, 0.92), OPTION_KNOX_WARMTH * (1.0 - night));
 
+    // Split tone: shadows a touch cool, light a touch warm, scaled by brightness.
+    float toneLuma = knoxLuma(color);
+    vec3 shadowTint = vec3(0.93, 1.0, 1.01);  // cool teal, not violet
+    vec3 lightTint = vec3(1.04, 1.0, 0.95);
+    color *= mix(shadowTint, lightTint, smoothstep(0.1, 0.6, toneLuma)) * OPTION_KNOX_WARMTH / 0.35 * 0.5
+           + vec3(1.0 - OPTION_KNOX_WARMTH / 0.35 * 0.5);
+
     color = mix(color, ungraded, sky);
+
+    // Golden hour: rose-gold sky and sunlit surfaces, deep cool shadows.
+    float golden = knoxGoldenHour() * OPTION_KNOX_GOLDEN_HOUR * (1.0 - 0.7 * muted);
+    if (golden > 0.0) {
+        float gl = knoxLuma(color);
+        vec3 sunlit = color * vec3(1.16, 0.97, 0.82);
+        vec3 shade = color * vec3(0.88, 0.97, 1.02);
+        vec3 graded = mix(shade, sunlit, smoothstep(0.08, 0.5, gl));
+        // The sky gets a rose glow, strongest near the horizon (lower on screen).
+        vec3 skyGlow = color * vec3(1.22, 0.9, 0.86) + vec3(0.04, 0.012, 0.0);
+        graded = dist < 0.0 ? mix(graded, skyGlow, smoothstep(0.95, 0.35, vUv.y)) : graded;
+        color = mix(color, graded, golden);
+    }
 
     // Rain: flatter, dimmer light. Follows the live rain, not wetness (which stays high indoors
     // and after a shower), and fades out at close range so interiors stay crisp. Eased off where
