@@ -62,6 +62,12 @@ Each patch has a switch in `Main` (`streamerWake`, `hotsaveThrottle`, `alarmThro
 - **Advice visibility rule**: ZombieBuddy copies advice code into the game class. Any field or method
   that an advice body touches must be `public`, or the game throws `IllegalAccessError` at run time.
 
+## Frame log (debug)
+
+`FrameLog` writes per-frame timings to CSV when the game runs with `-Dknoxambience.framelog=true`.
+Patches call `FrameLog.mark("Tag")` when they do something expensive so slow frames can be traced.
+See [../../docs/measuring.md](../../docs/measuring.md).
+
 ## Rules
 
 One patch class per file, named `Patch_<GameClass>_<method>`. Never patch code that Viewpoint
