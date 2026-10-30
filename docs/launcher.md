@@ -2,7 +2,8 @@
 
 ## Java memory
 
-**Advice: raise the heap to 6 GB and keep the stock collector (ZGC).** Measured on 42.21 below.
+**Advice: raise the heap to 6 GB and keep the stock collector (ZGC),** as long as Windows has commit
+headroom for it (see below). Measured on 42.21 below.
 
 What the game does today (42.21, checked 2026-10-30):
 
@@ -32,6 +33,24 @@ each run, PresentMon capture (first 5 s skipped). RTX 4070 Ti, i7-13700KF, 32 GB
 At 3 GB the heap was 92–94% full before each collection and 76–83% after, so ZGC ran almost
 continuously alongside Viewpoint's threads. At 6 GB it drops to about 45% after each collection. One
 run each, so treat small differences as noise; the 1% low and p99 changes are well beyond it.
+
+### Check the system's commit headroom
+
+The heap is only part of the game's memory. With Viewpoint and a large mod list, the game process
+committed about 15 GB with a 6 GB heap: the rest is uncompressed textures (7.5 GB reported by
+Viewpoint, more with texture-heavy mods), Viewpoint's caches and its 2 GB mesh arena. Windows limits
+committed memory to RAM plus page file, not RAM alone. In that session Viewpoint logged as little
+as 1.2 GB of the system's commit left (`process memory jumped ... of the system's commit left` in
+`console.txt`), and a 0.7 s freeze, video-memory evictions and missing world rendering followed.
+
+Before raising the heap, or after adding many mods:
+
+- Look for that `console.txt` line. Keep at least 3–4 GB of commit left while playing.
+- Let Windows manage the page file size (System > Advanced system settings > Performance >
+  Advanced > Virtual memory), or set it to 16 GB or more. This raises the commit limit without
+  using RAM.
+- If it is still tight, use `-Xmx5g`, close browsers and other large apps, or lower the game's
+  texture settings (texture compression also frees video memory).
 
 G1 (PZ_Optimization's suggestion) has not been compared with ZGC on 42.21. ZGC pauses were under
 0.1 ms in every run, so there is little reason to switch.
