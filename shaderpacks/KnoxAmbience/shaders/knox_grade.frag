@@ -30,7 +30,7 @@
 // effect here treats 0 as "clear day", so a missing uniform gives a plain look, never a broken one.
 
 #ifndef OPTION_KNOX_HORIZON_BLEND
-#define OPTION_KNOX_HORIZON_BLEND 0.7
+#define OPTION_KNOX_HORIZON_BLEND 0.5
 #endif
 #ifndef OPTION_KNOX_RAIN_FOG
 #define OPTION_KNOX_RAIN_FOG 1.0
@@ -48,22 +48,22 @@
 #define OPTION_KNOX_LAMP_HALO 0.5
 #endif
 #ifndef OPTION_KNOX_SUN_GLOW
-#define OPTION_KNOX_SUN_GLOW 0.5
+#define OPTION_KNOX_SUN_GLOW 0.35
 #endif
 #ifndef OPTION_KNOX_SKY_FILL
-#define OPTION_KNOX_SKY_FILL 0.5
+#define OPTION_KNOX_SKY_FILL 0.3
 #endif
 #ifndef OPTION_KNOX_AO_BOUNCE
 #define OPTION_KNOX_AO_BOUNCE 0.5
 #endif
 #ifndef OPTION_KNOX_RIM
-#define OPTION_KNOX_RIM 0.15
+#define OPTION_KNOX_RIM 0.0
 #endif
 #ifndef OPTION_KNOX_SHADOW_LIFT
 #define OPTION_KNOX_SHADOW_LIFT 0.2
 #endif
 #ifndef OPTION_KNOX_CLARITY
-#define OPTION_KNOX_CLARITY 0.3
+#define OPTION_KNOX_CLARITY 0.15
 #endif
 #ifndef OPTION_KNOX_NIGHT_DARKNESS
 #define OPTION_KNOX_NIGHT_DARKNESS 0.0
@@ -78,16 +78,16 @@
 #define OPTION_KNOX_SATURATION 0.9
 #endif
 #ifndef OPTION_KNOX_CONTRAST
-#define OPTION_KNOX_CONTRAST 1.05
+#define OPTION_KNOX_CONTRAST 1.08
 #endif
 #ifndef OPTION_KNOX_HIGHLIGHTS
-#define OPTION_KNOX_HIGHLIGHTS 0.5
+#define OPTION_KNOX_HIGHLIGHTS 0.3
 #endif
 #ifndef OPTION_KNOX_WARMTH
 #define OPTION_KNOX_WARMTH 0.35
 #endif
 #ifndef OPTION_KNOX_GOLDEN_HOUR
-#define OPTION_KNOX_GOLDEN_HOUR 0.6
+#define OPTION_KNOX_GOLDEN_HOUR 0.45
 #endif
 #ifndef OPTION_KNOX_WINDOW_GLOW
 #define OPTION_KNOX_WINDOW_GLOW 0.6
@@ -449,8 +449,8 @@ void main() {
     // Colour, draining a little at night. Warm colours (lamps, fire, wood, brick, skin) keep more
     // of theirs than cool ones, so the muting reads as cool outdoors against warm shelter.
     float warmHue = clamp((color.r - color.b) * 3.0, 0.0, 1.0);
-    float sat = mix(1.02, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
-    sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH);
+    float sat = mix(0.97, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
+    sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH * 0.5);
     color = mix(vec3(knoxLuma(color)), color, sat);
 
     // Dark areas lose their colour cast whatever the time of day says (dusk skies tint the shadows
@@ -480,7 +480,7 @@ void main() {
 
     // Split tone: shadows a touch cool teal, light a touch warm, scaled by brightness.
     float toneLuma = knoxLuma(color);
-    float split = OPTION_KNOX_WARMTH / 0.35 * 0.5;
+    float split = OPTION_KNOX_WARMTH / 0.35 * 0.25;
     color *= mix(vec3(1.0), mix(vec3(0.93, 1.0, 1.01), vec3(1.04, 1.0, 0.95), smoothstep(0.1, 0.6, toneLuma)), split);
 
     color = mix(color, ungraded, sky);
