@@ -72,8 +72,9 @@ public final class ShaderPackInstall {
             return "up to date (" + target + ")";
         }
 
-        if (!matches(target, marker)) {
-            return "left as is: files in " + target + " were changed since we installed them"
+        String changed = firstChange(target, marker);
+        if (changed != null) {
+            return "left as is: " + changed + " in " + target + " since we installed it"
                     + " (delete the folder to get the bundled one)";
         }
         if (marker.equals(want)) return "up to date (" + target + ")";
@@ -99,11 +100,17 @@ public final class ShaderPackInstall {
 
     /** True when every listed file exists with the listed hash. Extra files in the folder don't count. */
     private static boolean matches(Path target, Map<String, String> files) throws IOException {
+        return firstChange(target, files) == null;
+    }
+
+    /** Says how the first listed file that differs has changed ("x was deleted", "x was edited"), or null if none. */
+    private static String firstChange(Path target, Map<String, String> files) throws IOException {
         for (Map.Entry<String, String> e : files.entrySet()) {
             Path file = resolveInside(target, e.getKey());
-            if (!Files.isRegularFile(file) || !sha256(Files.readAllBytes(file)).equals(e.getValue())) return false;
+            if (!Files.isRegularFile(file)) return e.getKey() + " was deleted";
+            if (!sha256(Files.readAllBytes(file)).equals(e.getValue())) return e.getKey() + " was edited";
         }
-        return true;
+        return null;
     }
 
     private static Map<String, String> readMarker(Path target) throws IOException {
@@ -157,7 +164,8 @@ public final class ShaderPackInstall {
     }
 
     /**
-     * The game's own cache dir when it already knows it (it honours -cachedir), else {@code <user.home>/Zomboid}.
+     * The game's own cache dir when it already knows it (it honours -cachedir). Before that, the -cachedir
+     * launch argument if there is one, else {@code <user.home>/Zomboid}.
      * Read by reflection so a renamed game method costs us the fallback, not a crash.
      */
     private static Path zomboidDir() {
@@ -169,7 +177,30 @@ public final class ShaderPackInstall {
         } catch (Throwable ignored) {
             // fall through
         }
+        Path fromArgs = cacheDirArg(System.getProperty("sun.java.command"));
+        if (fromArgs != null) return fromArgs;
         return Path.of(System.getProperty("user.home"), "Zomboid");
+    }
+
+    /**
+     * The value of {@code -cachedir=...} in the launch command line, or null. The JVM gives us the command
+     * line as one string with arguments joined by spaces, so a path with spaces runs up to the next " -".
+     */
+    static Path cacheDirArg(String commandLine) {
+        if (commandLine == null) return null;
+        String key = "-cachedir=";
+        int at = commandLine.indexOf(" " + key);
+        if (at < 0) return null;
+        int from = at + 1 + key.length();
+        int to = commandLine.indexOf(" -", from);
+        String dir = (to < 0 ? commandLine.substring(from) : commandLine.substring(from, to)).strip();
+        if (dir.length() >= 2 && dir.startsWith("\"") && dir.endsWith("\"")) dir = dir.substring(1, dir.length() - 1);
+        if (dir.isEmpty()) return null;
+        try {
+            return Path.of(dir);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** Keeps index entries like "../x" from writing outside the pack folder. */

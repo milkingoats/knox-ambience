@@ -128,14 +128,16 @@ public final class FrameLog {
                 out.write("# start_epoch_ms=" + startEpochMs + "\n");
                 out.write("frame,t_ms,frame_ms,gc_count,gc_ms,tags\n");
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> drain(out)));
+                // Flush at most once a second, not after every row: at 60 fps the queue is empty
+                // between most frames, which would mean one flush per frame.
+                long lastFlush = System.nanoTime();
                 while (true) {
                     String row = rows.poll(1, TimeUnit.SECONDS);
-                    if (row == null) {
+                    if (row != null) out.write(row + "\n");
+                    if (System.nanoTime() - lastFlush >= 1_000_000_000L) {
                         out.flush();
-                        continue;
+                        lastFlush = System.nanoTime();
                     }
-                    out.write(row + "\n");
-                    if (rows.isEmpty()) out.flush();
                 }
             }
         } catch (IOException | InterruptedException e) {

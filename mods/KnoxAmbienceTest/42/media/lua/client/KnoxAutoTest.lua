@@ -357,7 +357,9 @@ local function onGameStart()
 end
 
 T.cfg = readConfig()
-if T.cfg then
+-- T outlives a Lua reload in the same session, so the flag stops a reload registering the handlers twice.
+if T.cfg and not T.registered then
+    T.registered = true
     print("[KnoxAmbienceTest] test run requested: mode=" .. tostring(T.cfg.mode) .. " save=" .. tostring(T.cfg.save))
     Events.OnFETick.Add(onFETick)
     Events.OnGameStart.Add(onGameStart)
