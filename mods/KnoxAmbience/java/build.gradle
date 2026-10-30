@@ -37,6 +37,23 @@ sourceSets {
             srcDirs = ['src']
         }
     }
+    // The perf-test mode is a separate mod (mods/KnoxAmbienceTest) so "before" runs can load it
+    // without Knox Ambience's patches. It is built here to keep one build command.
+    autotest {
+        java {
+            srcDirs = ['../../KnoxAmbienceTest/java/src']
+        }
+    }
+}
+
+configurations {
+    autotestCompileOnly.extendsFrom compileOnly
+}
+
+tasks.named('compileAutotestJava') {
+    doFirst {
+        if (!pzJar || !zbJar) throw new GradleException('Set pzJar and zbJar (see README.md)')
+    }
 }
 
 jar {
@@ -44,8 +61,20 @@ jar {
     archiveVersion.set('')
 }
 
+tasks.register('autotestJar', Jar) {
+    from sourceSets.autotest.output
+    archiveBaseName.set('KnoxAmbienceTest')
+    archiveVersion.set('')
+}
+
+tasks.register('installAutotest', Copy) {
+    dependsOn autotestJar
+    from autotestJar.archiveFile
+    into "${projectDir}/../../KnoxAmbienceTest/42/media/java"
+}
+
 tasks.register('install', Copy) {
-    dependsOn jar
+    dependsOn jar, installAutotest
     from jar.archiveFile
     into "${projectDir}/../42/media/java"
 }

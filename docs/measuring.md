@@ -52,3 +52,6 @@ spikes over 50 ms (`--spike`), the worst frames with their tags, and the change 
 Use the same save, time of day and weather for every run. Walk a fixed loop for two minutes, then drive
 the same road for two minutes, and capture each separately. Note the build, mod list and settings with
 the numbers.
+
+[perf-test.md](perf-test.md) automates all of this: one command restores the test save, starts the
+game, walks and drives the recorded route by itself, captures each part and prints the summary.

@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
  * Output goes to {@code <user.home>/Zomboid/Logs/knoxambience-frames-<time>.csv}, or to the
  * folder given by {@code -Dknoxambience.framelog.dir=...}.
  *
+ * The first line is a comment, {@code # start_epoch_ms=<wall-clock ms at t_ms 0>}.
  * Columns: frame, t_ms (since logging started), frame_ms (time since the previous frame ended),
  * gc_count and gc_ms (GC pauses and pause time during the frame, all collectors summed),
  * tags (what {@link #mark} reported during the frame, separated by '|').
@@ -42,6 +43,7 @@ public final class FrameLog {
     private static long dropped = 0;
 
     private static long startNanos;
+    private static long startEpochMs;
     private static long lastNanos;
     private static long frame;
     private static long lastGcCount;
@@ -100,6 +102,7 @@ public final class FrameLog {
     private static void start(long now) {
         started = true;
         startNanos = now;
+        startEpochMs = System.currentTimeMillis();
         lastNanos = now;
         gcBeans = pauseBeans();
         for (GarbageCollectorMXBean bean : gcBeans) {
@@ -121,6 +124,8 @@ public final class FrameLog {
         try {
             Files.createDirectories(file.getParent());
             try (BufferedWriter out = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+                // Wall-clock time of t_ms = 0, so tools can line the log up with other captures.
+                out.write("# start_epoch_ms=" + startEpochMs + "\n");
                 out.write("frame,t_ms,frame_ms,gc_count,gc_ms,tags\n");
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> drain(out)));
                 while (true) {
