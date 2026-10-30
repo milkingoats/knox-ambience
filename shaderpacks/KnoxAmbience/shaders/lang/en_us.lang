@@ -1,0 +1,7 @@
+option.FOG_DENSITY=Fog density
+option.FOG_START=Fog start
+screen.GRADING=Colour grading
+option.SATURATION=Saturation
+option.CONTRAST=Contrast
+option.TINT_STRENGTH=Overcast tint
+option.NIGHT_DARKNESS=Night darkness

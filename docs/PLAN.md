@@ -1,0 +1,73 @@
+# Plan
+
+Goal: an immersion-focused modpack for Project Zomboid Build 42.21 around Project Viewpoint. Our own
+performance work and visuals, including a Zomboid-specific shader pack in the spirit of the Minecraft
+ones, plus polish.
+
+## Decisions
+
+1. **Don't fork PZ_Optimization** (github.com/xD3I/PZ_Optimization).
+   - No LICENSE file, so all rights reserved. We can't redistribute modified builds.
+   - Removed from the Steam Workshop.
+   - Fragile: replaces about 300 game classes, pinned to one game revision, updated almost daily.
+   - Its notes say Viewpoint's frame-cap code matches theirs, so there is ownership tension.
+   - We may read its write-ups for ideas and measurements. **Never copy its code**: `src/overrides/` is
+     mostly decompiled game code.
+2. **Depend on Viewpoint, ZombieBuddy and immersion mods as normal Workshop items.** Viewpoint is
+   proprietary ("all rights reserved"): depend on it, never bundle or change it.
+3. **Our performance mod is a ZombieBuddy Java mod** that patches individual methods.
+4. **Licence:** MIT for everything in this repo.
+
+Viewpoint availability was confirmed live on the Workshop on 2026-10-30 (last updated 16 Oct). It
+requires ZombieBuddy, which is also on GitHub under MIT.
+
+## Performance: what still matters under Viewpoint
+
+From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/how-it-works.md`:
+
+- In first person Viewpoint is GPU-bound (97% GPU). PZ_Optimization gave **no average-fps gain** but
+  better 1% lows (106→116 walking, 114→139 driving), fewer spikes (walking p99.9 18.3→11.7 ms) and a
+  much lighter game thread (52→36%, 48→28%). **Aim for smoothness, not average fps.**
+- **High value**
+  - Java memory: G1 with a 4 GB heap. Launcher setting, no code. See [launcher.md](launcher.md).
+  - Chunk streaming: wake the loader as soon as a chunk is requested (stock waits on a 140 ms timer);
+    process chunks in parallel.
+  - Zombie updates on worker threads; cache the lookups behind zombie state queries.
+  - Limit autosaves, spread newly loaded chunks across frames, fix the house-alarm sound check, reduce
+    sound upkeep.
+  - Faster boot and loading: script parser, item-property lookups, load-time fixes.
+- **Avoid** (Viewpoint patches the same code): player line of sight, zombie culling and LOD, light
+  prefetch, vsync and frame pacing.
+- **Skip** (top-down only): tree and tile baking, puddles, fog, rain, lightning, zoom, PZ_Optimization's
+  visual enhancements.
+
+## Visuals
+
+- Viewpoint has experimental Iris shader pack support. Packs go in `Zomboid/viewpoint-shaderpacks` and
+  are picked under Delete > Shaders.
+- **We write our own pack**, not a port of a Minecraft pack (most forbid redistributing changes).
+  Target look: overcast light, fog, dark nights, wet roads, flashlight-lit interiors, muted grading.
+- Add-on ideas (ZombieBuddy, alongside Viewpoint): head bob and weapon sway, screen effects from the
+  character's state (pain, panic, drunk, tired), rain on the view, mask and helmet overlays,
+  flashlight improvements.
+- Target GPU: RTX 4070 Ti, 12 GB. Video memory is the limit (Viewpoint used ~12 GB on a 4090 at 5K):
+  lower draw distance first. No ray tracing (OpenGL). The DLSS Frame Generation add-on (3818838508,
+  beta, Windows-only) freezes when the PZ_Optimization UI is on.
+
+## Open questions
+
+- [ ] Which hooks does Viewpoint expose to add-ons? Study existing add-ons or ask the authors
+      (discord.gg/projectviewpoint).
+- [ ] Which Iris uniforms and passes does Viewpoint actually implement?
+- [ ] Re-check the add-ons we want (shader compat 3815225881, Panini 3823639135, DLSS FG 3818838508)
+      from a logged-in browser.
+
+## Next steps
+
+1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
+2. ~~Repo with this plan and both skeletons.~~ This change.
+3. Shader pack first pass: lighting, fog, colour grading.
+4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix.
+5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.
+
+Building and testing need a real machine: the game's `projectzomboid.jar`, JDK 25 and a GPU.

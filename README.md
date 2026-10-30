@@ -8,7 +8,7 @@ This repo holds our own work:
 
 | Path | What |
 |------|------|
-| `mods/KnoxAmbiencePerf/` | Performance mod: small ZombieBuddy method patches aimed at smoother frames under Viewpoint |
+| `mods/KnoxAmbience/` | Performance mod: small ZombieBuddy method patches aimed at smoother frames under Viewpoint |
 | `shaderpacks/KnoxAmbience/` | Original Iris-format shader pack for Viewpoint: overcast light, fog, dark nights, muted grading |
 | `docs/` | Plan, launcher settings, mod list |
 
