@@ -195,10 +195,15 @@ void main() {
     color = mix(color, vec3(knoxLuma(color)), gloom * 0.5);
     color *= 1.0 - gloom * 0.4;
 
-    // Night with light falloff: dim pixels lose more than lit ones.
-    float lit = smoothstep(0.05, 0.6, knoxLuma(color));
-    float darken = OPTION_KNOX_NIGHT_DARKNESS * 0.6 * (1.0 + OPTION_KNOX_LIGHT_FALLOFF * (1.0 - lit));
+    // Night with light falloff: dim pixels lose more than lit ones. Pixels that are already
+    // near-black skip the falloff and keep a faint floor, so dark halls stay readable up close.
+    float nightLuma = knoxLuma(color);
+    float lit = smoothstep(0.05, 0.6, nightLuma);
+    float nearBlack = 1.0 - smoothstep(0.0, 0.08, nightLuma);
+    float falloff = OPTION_KNOX_LIGHT_FALLOFF * (1.0 - lit) * (1.0 - nearBlack);
+    float darken = OPTION_KNOX_NIGHT_DARKNESS * 0.6 * (1.0 + falloff);
     color *= 1.0 - night * clamp(darken, 0.0, 0.95);
+    color += vec3(0.010, 0.010, 0.011) * night * nearBlack;
 
     // Cozy pools: at night, lit pixels lean warm (lamplight, flashlights, windows).
     color = mix(color, color * vec3(1.12, 0.98, 0.82), OPTION_KNOX_WARMTH * night * lit);
