@@ -56,9 +56,29 @@ tasks.named('compileAutotestJava') {
     }
 }
 
+// The shader pack ships inside the jar; ShaderPackInstall copies it into viewpoint-shaderpacks at startup.
+// The index lists its files, because a class loader can't list a folder.
+def shaderPackDir = file("${projectDir}/../../../shaderpacks/KnoxAmbience")
+def shaderPackIndexDir = layout.buildDirectory.dir('generated/shaderpack')
+
+tasks.register('shaderPackIndex') {
+    inputs.dir(shaderPackDir)
+    outputs.dir(shaderPackIndexDir)
+    doLast {
+        def lines = fileTree(shaderPackDir).files
+                .collect { shaderPackDir.toPath().relativize(it.toPath()).toString().replace('\\', '/') }
+                .sort()
+        def out = shaderPackIndexDir.get().file('shaderpack/KnoxAmbience.index').asFile
+        out.parentFile.mkdirs()
+        out.text = lines.join('\n') + '\n'
+    }
+}
+
 jar {
     archiveBaseName.set('KnoxAmbience')
     archiveVersion.set('')
+    from(shaderPackDir) { into 'shaderpack/KnoxAmbience' }
+    from(tasks.named('shaderPackIndex'))
 }
 
 tasks.register('autotestJar', Jar) {
