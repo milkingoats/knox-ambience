@@ -58,9 +58,13 @@ void main() {
             // Only real light sources and lit surfaces spill; moonlit roads and pale walls don't, or the
             // night turns hazy.
 #if OPTION_KNOX_STYLE == OPTION_KNOX_STYLE_NATURAL
-            // Natural: by brightness only, whatever the light's colour.
-            spill += l * smoothstep(0.5, 0.9, l);
-            lights += c * smoothstep(0.6, 0.95, l);
+            // Natural: by brightness only, whatever the light's colour, but never the sky: at dusk it
+            // is still bright while night is rising, and spilled warm light onto the trees and roofs
+            // against it. Only taps bright enough to count pay for the sky test.
+            if (l > 0.5 && !knoxIsSky(vUv + o)) {
+                spill += l * smoothstep(0.5, 0.9, l);
+                lights += c * smoothstep(0.6, 0.95, l);
+            }
 #else
             spill += l * smoothstep(0.4, 0.85, l) * clamp((c.r - c.b) * 3.0 + 0.4, 0.0, 1.0);
             lights += c * smoothstep(0.55, 0.95, l) * clamp((c.r - c.b) * 3.0 + 0.2, 0.0, 1.0);
@@ -68,7 +72,7 @@ void main() {
             // Sun glow: only the brightest sky (the sun and the clouds it lights), never lit walls
             // or roads, so daytime surfaces don't bloom into white blobs.
 #if OPTION_KNOX_STYLE != OPTION_KNOX_STYLE_NATURAL
-            // Natural has no sun glow, so it skips the sky test (two depth reads a tap).
+            // Natural has no sun glow, so it skips this sky test (two depth reads a tap).
             if (knoxIsSky(vUv + o)) {
                 skyTaps += 1.0;
                 if (l > 0.82) sun += c * smoothstep(0.82, 0.98, l);
