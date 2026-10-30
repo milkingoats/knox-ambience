@@ -6,7 +6,8 @@ import me.zed_0xff.zombie_buddy.Patch;
  * (d) Keep Rolling Hills' hills on under native shader packs built on Viewpoint's own looks.
  *
  * Rolling Hills turns its hills off for any native pack whose folder name isn't on its fixed list
- * (normal, default, vivid), plus True Weathers via TrueWeatherCompat.supports(active). It is asked
+ * (normal, default, vivid), plus True Weathers via TrueWeatherCompat.supports(pack), which gets the
+ * active ShaderPack. It is asked
  * again every time Viewpoint links a pack. Knox Ambience is built on default, so it's off.
  *
  * Shim: when supports() says no, ask ShaderPackBase whether the active pack's base= chain reaches
@@ -20,7 +21,7 @@ import me.zed_0xff.zombie_buddy.Patch;
 @Patch(className = "wt.rollinghills.TrueWeatherCompat", methodName = "supports")
 public class Patch_RollingHills_supports {
     @Patch.OnExit
-    public static void exit(@Patch.Argument(0) Object active, @Patch.Return(readOnly = false) boolean supported) {
-        if (!supported && Main.rollingHillsCompat && ShaderPackBase.builtOnViewpointLook(active)) supported = true;
+    public static void exit(@Patch.Argument(0) Object pack, @Patch.Return(readOnly = false) boolean supported) {
+        if (!supported && Main.rollingHillsCompat && ShaderPackBase.builtOnViewpointLook(pack)) supported = true;
     }
 }
