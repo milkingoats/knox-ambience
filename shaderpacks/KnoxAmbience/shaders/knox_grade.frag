@@ -7,8 +7,9 @@
 // - Rain fog: extra grey fog when it rains, pulled closer the harder it rains.
 // - Light falloff: night darkens dim pixels harder than lit ones, so lamps and flashlights keep
 //   their pools of light.
-// - Neutral nights: colour drains out after dusk and the cool day tint fades, so night goes dark,
-//   not blue.
+// - Neutral nights: colour drains out after dusk, so night goes dark, not blue.
+// - Cozy warmth: a soft warm cast by day, and warm lamp and flashlight pools at night against the
+//   dark, plus soft highlights and a gentle vignette.
 // - Rain gloom: rain flattens and dims the light.
 //
 // Viewpoint sets uniforms by name and skips any it doesn't know, which then read as 0. Every
@@ -27,13 +28,19 @@
 #define OPTION_KNOX_NIGHT_NEUTRAL 0.7
 #endif
 #ifndef OPTION_KNOX_SATURATION
-#define OPTION_KNOX_SATURATION 0.85
+#define OPTION_KNOX_SATURATION 0.9
 #endif
 #ifndef OPTION_KNOX_CONTRAST
 #define OPTION_KNOX_CONTRAST 1.05
 #endif
-#ifndef OPTION_KNOX_TINT
-#define OPTION_KNOX_TINT 0.3
+#ifndef OPTION_KNOX_HIGHLIGHTS
+#define OPTION_KNOX_HIGHLIGHTS 0.5
+#endif
+#ifndef OPTION_KNOX_WARMTH
+#define OPTION_KNOX_WARMTH 0.35
+#endif
+#ifndef OPTION_KNOX_VIGNETTE
+#define OPTION_KNOX_VIGNETTE 0.25
 #endif
 #ifndef OPTION_KNOX_RAIN_GLOOM
 #define OPTION_KNOX_RAIN_GLOOM 0.3
@@ -118,12 +125,26 @@ void main() {
     }
 
     // Muted colour, draining further at night so nights go grey-dark rather than blue.
-    float sat = OPTION_KNOX_SATURATION * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night);
+    // Warm colours (lamps, fire, wood, brick, skin) keep more of their colour than cool ones, so
+    // the muting reads as cool outdoors against warm shelter rather than drained.
+    float warmHue = clamp((color.r - color.b) * 3.0, 0.0, 1.0);
+    float sat = OPTION_KNOX_SATURATION * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
+    sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH);
     color = mix(vec3(knoxLuma(color)), color, sat);
-    color = (color - 0.5) * OPTION_KNOX_CONTRAST + 0.5;
+    // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
+    // instead of clipping.
+    vec3 contrasted = (color - 0.5) * OPTION_KNOX_CONTRAST + 0.5;
+    color = mix(contrasted, color, smoothstep(0.6, 0.95, knoxLuma(color)));
 
-    // Cool overcast tint by day only.
-    color = mix(color, color * vec3(0.92, 0.97, 1.05), OPTION_KNOX_TINT * (1.0 - night));
+    // Gentle highlight shoulder: compress the top end so overcast light reads soft, not bleached.
+    float hl = knoxLuma(color);
+    if (hl > 0.7) {
+        float target = 0.7 + (hl - 0.7) / (1.0 + (hl - 0.7) * OPTION_KNOX_HIGHLIGHTS * 4.0);
+        color *= target / hl;
+    }
+
+    // Warm cast by day.
+    color = mix(color, color * vec3(1.05, 1.0, 0.92), OPTION_KNOX_WARMTH * (1.0 - night));
 
     // Rain: flatter, dimmer light.
     color = mix(color, vec3(knoxLuma(color)), OPTION_KNOX_RAIN_GLOOM * rain * 0.5);
@@ -133,6 +154,13 @@ void main() {
     float lit = smoothstep(0.05, 0.6, knoxLuma(color));
     float darken = OPTION_KNOX_NIGHT_DARKNESS * 0.6 * (1.0 + OPTION_KNOX_LIGHT_FALLOFF * (1.0 - lit));
     color *= 1.0 - night * clamp(darken, 0.0, 0.95);
+
+    // Cozy pools: at night, lit pixels lean warm (lamplight, flashlights, windows).
+    color = mix(color, color * vec3(1.12, 0.98, 0.82), OPTION_KNOX_WARMTH * night * lit);
+
+    // Gentle vignette to frame the view.
+    vec2 v = vUv - 0.5;
+    color *= 1.0 - OPTION_KNOX_VIGNETTE * smoothstep(0.15, 0.75, dot(v, v) * 2.0);
 
     color += (knoxNoise(gl_FragCoord.xy) - 0.5) / 255.0;
     fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);

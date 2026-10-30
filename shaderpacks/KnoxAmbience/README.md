@@ -10,9 +10,10 @@ end (`shaders/knox_grade.frag`) that changes the mood:
 - **Rain fog**: extra grey fog while it rains, closer the harder it rains.
 - **Light falloff**: nights darken dim areas harder than lit ones, so lamp and flashlight pools stay
   bright while the street sinks.
-- **Neutral nights**: colour drains out after dusk and the cool day tint fades, so night goes dark,
-  not blue.
-- **Muted grading and rain gloom**: overcast saturation and contrast, flatter light in rain.
+- **Neutral nights**: colour drains out after dusk, so night goes dark, not blue.
+- **Cozy warmth**: a soft warm cast by day, warm lamp and flashlight pools at night, soft highlights
+  so skies and pale roads keep detail, and a gentle vignette.
+- **Rain gloom**: flatter, dimmer light in rain.
 
 ## Install
 
