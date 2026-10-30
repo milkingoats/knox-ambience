@@ -28,6 +28,12 @@
     Copy that save as the test save, start it, and record the route while you walk and drive it once.
 
 .EXAMPLE
+    .\perf-test.ps1 -NewGame -Mods ZombieBuddy,KnoxAmbience -AB -Phases walk,drive,shots
+    Baseline with no test save or recorded route: each session starts a fresh world at -Spawn, takes
+    the -Shots screenshots, walks a loop there, then drives a car along the nearest road.
+    baseline.bat runs exactly this.
+
+.EXAMPLE
     .\perf-test.ps1 -Compare 20261030-190000-before, 20261030-190800-after
 #>
 [CmdletBinding(DefaultParameterSetName = 'Run')]
@@ -48,6 +54,15 @@ param(
     # Seconds of each capture to ignore at the start.
     [Parameter(ParameterSetName = 'Run')][double]$Skip = 3,
     [Parameter(ParameterSetName = 'Run')][switch]$KeepWalking,
+    # Fresh world instead of the test save: spawn point (x,y,z), map, and the start time of day.
+    [Parameter(ParameterSetName = 'Run')][switch]$NewGame,
+    [Parameter(ParameterSetName = 'Run')][string]$Spawn = '10620,9550,0',
+    [Parameter(ParameterSetName = 'Run')][string]$Map = 'Muldraugh, KY',
+    [Parameter(ParameterSetName = 'Run')][double]$StartHour = 12,
+    # Screenshots for the 'shots' phase (new game only): name@hour@weather, weather clear, rain or fog.
+    [Parameter(ParameterSetName = 'Run')][string]$Shots = 'noon@12@clear;afternoon@17@clear;golden@19.5@clear;sunset@20.5@clear;dusk@21.25@clear;night@23.5@clear;rain@15@rain;fog@8@fog',
+    # Base mod list for this run instead of the perf base preset file, e.g. ZombieBuddy,KnoxAmbience.
+    [Parameter(ParameterSetName = 'Run')][string[]]$Mods = @(),
 
     [Parameter(ParameterSetName = 'Record', Mandatory = $true)][switch]$Record,
     # Save to copy as the test save, relative to Zomboid\Saves, e.g. Outbreak\2026-10-30_16-02-45.
@@ -74,8 +89,10 @@ function Split-List([string[]]$list) { @($list | ForEach-Object { $_ -split ',' 
 $Without = Split-List $Without
 $Toggle = Split-List $Toggle
 $Phases = Split-List $Phases
+$Mods = Split-List $Mods
 if ($Compare) { $Compare = Split-List $Compare }
-foreach ($p in $Phases) { if ('walk', 'drive' -notcontains $p) { throw "Unknown phase '$p' (use walk, drive)" } }
+foreach ($p in $Phases) { if ('walk', 'drive', 'shots' -notcontains $p) { throw "Unknown phase '$p' (use walk, drive, shots)" } }
+if ($Phases -contains 'shots' -and -not $NewGame) { throw "The shots phase needs -NewGame." }
 
 $TestSaveName = 'KA-perftest'
 $ConfigName = 'knoxambience_autotest.txt'
@@ -274,16 +291,22 @@ function Format-Stats($s) {
 function Invoke-Session([string]$runLabel, [string[]]$without, [string]$mode) {
     if (Test-GameRunning) { throw 'Project Zomboid is already running. Quit it first: each test needs a fresh game start.' }
 
-    $route = Read-KeyValues $RouteFile
-    $gameMode = $route['gamemode']
-    if (-not $gameMode) { throw "No route at $RouteFile. Make one with -Record." }
+    if ($NewGame) {
+        $route = @{}
+        $gameMode = 'Sandbox'
+    } else {
+        $route = Read-KeyValues $RouteFile
+        $gameMode = $route['gamemode']
+        if (-not $gameMode) { throw "No route at $RouteFile. Make one with -Record." }
+    }
 
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $runDir = Join-Path $RunsDir "$stamp-$runLabel"
     New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
-    # Mod list: the preset, minus -Without, plus the test mod.
-    $mods = @(Read-ModList $PresetFile | Where-Object { $without -notcontains $_ -and $_ -ne $TestModId })
+    # Mod list: the preset (or -Mods), minus -Without, plus the test mod.
+    $base = $(if ($Mods.Count) { $Mods } else { Read-ModList $PresetFile })
+    $mods = @($base | Where-Object { $without -notcontains $_ -and $_ -ne $TestModId })
     $mods += $TestModId
     Set-Content (Join-Path $runDir 'mods.txt') $mods
 
@@ -305,7 +328,7 @@ function Invoke-Session([string]$runLabel, [string[]]$without, [string]$mode) {
     try {
         # Main-menu mods must match the save's, or the game reloads Lua before loading it.
         Write-ModsFile $defaultMods $mods
-        Restore-TestSave $gameMode $mods
+        if (-not $NewGame) { Restore-TestSave $gameMode $mods }
 
         $config = [ordered]@{
             expires = (Get-EpochMs) + 15 * 60 * 1000
@@ -317,6 +340,16 @@ function Invoke-Session([string]$runLabel, [string[]]$without, [string]$mode) {
             drive_speed = $DriveSpeed
             walk = $route['walk']
             drive = $route['drive']
+        }
+        if ($NewGame) {
+            $config.newgame = 1
+            $config.save = ''
+            $config.world = "KA-baseline-$stamp"
+            $config.spawn = $Spawn
+            $config.map = $Map
+            $config.start_hour = $StartHour
+            $config.shots = $(if ($Phases -contains 'shots') { $Shots } else { '' })
+            $config.shot_prefix = "ka_$runLabel`_"
         }
         if ($mode -eq 'record') { $config.expires = (Get-EpochMs) + 10 * 60 * 1000 }
         Write-Text $ConfigFile ((($config.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join "`r`n") + "`r`n")
@@ -392,6 +425,14 @@ function Invoke-Session([string]$runLabel, [string[]]$without, [string]$mode) {
         # Collect logs.
         Copy-Item (Join-Path $ZomboidDir 'console.txt') $runDir -ErrorAction SilentlyContinue
         Copy-Item $StatusFile $runDir -ErrorAction SilentlyContinue
+        $shotFiles = @(Get-ChildItem (Join-Path $ZomboidDir 'Screenshots') -Filter 'ka_*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $launchTime })
+        if ($shotFiles) {
+            $shotDir = Join-Path $runDir 'shots'
+            New-Item -ItemType Directory -Force -Path $shotDir | Out-Null
+            foreach ($f in $shotFiles) { Copy-Item $f.FullName $shotDir }
+            $info.shots = $shotFiles.Count
+        }
         $frameLogs = @(Get-ChildItem (Join-Path $ZomboidDir 'Logs') -Filter 'knoxambience-frames-*.csv' -ErrorAction SilentlyContinue |
             Where-Object { $_.LastWriteTime -ge $launchTime })
         foreach ($f in $frameLogs) { Copy-Item $f.FullName $runDir }
@@ -458,6 +499,7 @@ function Write-Summary($info, [string]$runDir) {
         }
     }
     if ($info.Contains('knoxambience') -and $info.knoxambience) { $out += ''; $out += ($info.knoxambience | ForEach-Object { "  $_" }) }
+    if ($info.Contains('shots')) { $out += "  Screenshots: $($info.shots) in $(Join-Path $runDir 'shots')" }
     if ($info.Contains('commit_warning')) { $out += "  Memory: $($info.commit_warning)" }
     foreach ($e in $info.errors) { $out += "  $e" }
     $out += "Files: $runDir"
@@ -471,7 +513,7 @@ function Write-Comparison($groups, [string]$path) {
     $metrics = @('avg_fps', 'low1_fps', 'low01_fps', 'p99_ms', 'max_ms', 'over25', 'over50')
     $names = @($groups.Keys)
     $out = @("Comparison (median of each variant's runs, PresentMon)", '')
-    foreach ($phase in $Phases) {
+    foreach ($phase in @($Phases | Where-Object { $_ -ne 'shots' })) {
         $out += $phase
         $out += ('  {0,-10}' -f 'metric') + (($names | ForEach-Object { '{0,14}' -f $_ }) -join '') + '    change'
         foreach ($m in $metrics) {
