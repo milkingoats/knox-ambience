@@ -34,14 +34,11 @@ annotations to another package, so `mod.info` limits the jar to ZombieBuddy 2.x.
 | (c) House alarm update every 250 ms, not every frame | `AmbientStreamManager.update`, `Alarm.update` | OnEnter advice sets a 250 ms tick; OnEnter skipOn advice skips `Alarm.update` between ticks | to test in game |
 | (c) Drop the alarm's debug print | `Alarm.updateSound` | CallSwap: `PrintStream.println(int)` → no-op | to test in game |
 | (d) Rolling Hills keeps its hills on under packs built on Viewpoint's Default or Vivid | `wt.rollinghills.TrueWeatherCompat.supports` (Rolling Hills) | OnExit advice: if it says no, `ShaderPackBase` walks the active pack's `base=` chain and answers yes when it reaches normal, default or vivid | to test in game |
-| (e) Clean line where walls meet the ceiling (issue #25) | `viewpoint.world.WorldMesher.gather` (Viewpoint 0.1.6.1) | OnExit advice hands the chunk recipe to `SeamTrim`, which adds a strip over the top 0.08 of each wall face, sampling the wall art just below its jagged top rows. Viewpoint's own ops are not changed; other Viewpoint versions are skipped | to test in game |
 
 Each patch has a switch in `Main` (`streamerWake`, `hotsaveThrottle`, `alarmThrottle`,
-`alarmQuietLog`, `rollingHillsCompat`, `seamTrim`). The seam trim can also be turned off at launch with
-`-Dknoxambience.seamtrim=false`, and its height set with `-Dknoxambience.seamtrim.height=0.05` (0.02 to 0.3;
-a storey is 2.449).
+`alarmQuietLog`, `rollingHillsCompat`).
 
-Patches into other mods (d, e) are thin shims: the advice only forwards to a public method in our own code,
+Patches into other mods (d) are thin shims: the advice only forwards to a public method in our own code,
 and our code reads the other mod's objects by reflection. If a mod update renames the hooked method,
 the shim doesn't bind and that mod behaves as it would without us; if the fields change, our code logs
 one line and stands down. Set a switch to `false` to get the stock behaviour back.

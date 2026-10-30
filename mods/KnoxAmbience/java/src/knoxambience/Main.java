@@ -22,8 +22,6 @@ public class Main {
     public static volatile boolean alarmThrottle = true;    // (c) house alarm update every 250 ms
     public static volatile boolean alarmQuietLog = true;    // (c) drop the alarm's println on restart
     public static volatile boolean rollingHillsCompat = true; // (d) Rolling Hills accepts packs built on default/vivid
-    // (e) strip over the jagged wall-ceiling line in Viewpoint's mesh. Off: -Dknoxambience.seamtrim=false
-    public static volatile boolean seamTrim = !"false".equalsIgnoreCase(System.getProperty("knoxambience.seamtrim"));
 
     public static void main(String[] args) {
         // Viewpoint scans viewpoint-shaderpacks after we load, so the pack is in place for that scan.
@@ -44,7 +42,7 @@ public class Main {
         // prints "active" the first time it runs (see once()).
         System.out.println(TAG + "loaded. call swaps: streamer wake=" + ok(streamer)
                 + ", alarm println=" + ok(alarmLog)
-                + ". advice patches report 'active' on first use: addJob, hot save throttle, alarm tick, Rolling Hills compat, seam trim.");
+                + ". advice patches report 'active' on first use: addJob, hot save throttle, alarm tick, Rolling Hills compat.");
         System.out.println(TAG + "shader pack: " + shaderPack);
     }
 
