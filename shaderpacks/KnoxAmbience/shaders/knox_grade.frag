@@ -16,7 +16,9 @@
 // - Light spill and lamp halos: bright areas (a lit doorway, a lamp, a window) bleed soft light
 //   into the dark around them, and the brightest get a warm halo.
 // - Surface light: sky fill on shadowed up-facing surfaces and warm ground bounce on walls,
-//   coloured bounce in ambient-occluded corners, and a soft rim on edges facing away from us.
+//   a colour tint in ambient-occluded corners, and a soft rim on edges facing away from us.
+//   These read Viewpoint's G-buffer, which is jittered for its TAA while the colour we get is
+//   already resolved, so they fade out on silhouette edges or every edge would shimmer.
 // - Sun glow: by day the sun and the clouds it lights glow softly over the scene around them,
 //   warmer towards sunrise and sunset.
 // - Colour: weather-driven saturation (clear is vivid, rain is muted), neutral darks, silver
@@ -110,6 +112,12 @@
 #endif
 #ifndef OPTION_KNOX_DEBUG_NORMALS
 #define OPTION_KNOX_DEBUG_NORMALS 3
+#endif
+#ifndef OPTION_KNOX_DEBUG_OCCLUSION
+#define OPTION_KNOX_DEBUG_OCCLUSION 4
+#endif
+#ifndef OPTION_KNOX_DEBUG_EDGES
+#define OPTION_KNOX_DEBUG_EDGES 5
 #endif
 #ifndef OPTION_KNOX_DEBUG
 #define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
@@ -251,20 +259,24 @@ vec3 knoxLift(vec3 c, float gain) {
     return c * (mapped / m);
 }
 
-// Ambient occlusion with coloured multi-bounce (Jimenez et al. 2016 fit): light bouncing inside a
-// corner takes on the surface's colour, so occluded corners of a red brick wall read deep red
-// instead of grey. Returns the factor to apply on top of an image that already has plain AO.
-vec3 knoxAoBounce(float ao, vec3 albedo) {
+// Colour tint for occluded corners, from the multi-bounce fit (Jimenez et al. 2016): light
+// bouncing inside a corner takes on the surface's colour, so a red brick corner reads red instead
+// of grey. Viewpoint's lighting already applies multi-bounce AO, so this only shifts the hue and
+// keeps brightness: brightening again lit a pale, sparkly ring wherever AO is (round the base of
+// cars, door frames, window panes). Returns a factor with luma 1.
+vec3 knoxAoTint(float ao, vec3 albedo) {
     vec3 a = 2.0404 * albedo - 0.3324;
     vec3 b = -4.7951 * albedo + 0.6417;
     vec3 c = 2.7552 * albedo + 0.6903;
-    vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao);
-    return clamp(bounced / ao, 1.0, 2.0);
+    vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao) / ao;
+    return clamp(bounced / max(knoxLuma(bounced), 1.0e-3), 0.7, 1.4);
 }
 
 // Surface light from the G-buffer, near world only: sky fill, ground bounce, coloured AO, rim.
-// Every part is 0 at its option's 0, and pixels without a normal are left alone.
-vec3 knoxSurfaceLight(vec3 color, float night, float farness) {
+// Every part is 0 at its option's 0, and pixels without a normal are left alone. flatness is
+// knoxFlatness: 0 on silhouette edges, where the jittered G-buffer disagrees with the colour.
+vec3 knoxSurfaceLight(vec3 color, float night, float farness, float flatness) {
+    if (flatness <= 0.0) return color;
     if (textureLod(uDepth, vUv, 0.0).r >= 1.0) return color;
     vec3 n = textureLod(uNormal, vUv, 0.0).rgb;
     if (dot(n, n) < 0.25) return color;
@@ -273,13 +285,13 @@ vec3 knoxSurfaceLight(vec3 color, float night, float farness) {
     vec3 albedo = surface.rgb;
     float foliage = step(0.9, surface.a);  // Viewpoint marks foliage with alpha 1
     float day = 1.0 - night;
-    float near = 1.0 - farness;
+    float near = (1.0 - farness) * flatness;
     float luma = knoxLuma(color);
 
-    // Coloured bounce in occluded corners.
+    // Coloured tint in occluded corners, hue only.
     float ao = textureLod(uOcclusion, vUv, 0.0).a;
     if (OPTION_KNOX_AO_BOUNCE > 0.0 && ao > 0.05 && ao < 0.999) {
-        color *= mix(vec3(1.0), knoxAoBounce(ao, albedo), OPTION_KNOX_AO_BOUNCE * near);
+        color *= mix(vec3(1.0), knoxAoTint(ao, albedo), OPTION_KNOX_AO_BOUNCE * near);
     }
 
     // Sky fill and ground bounce, only into shade: up-facing shadowed surfaces take a little of
@@ -302,6 +314,23 @@ vec3 knoxSurfaceLight(vec3 color, float night, float farness) {
         color = knoxAddLight(color, rimColor * rim * OPTION_KNOX_RIM * 0.3 * mix(0.3, 1.0, day) * near);
     }
     return color;
+}
+
+// How flat the surface is around this pixel: 1 on a surface, 0 on a silhouette edge. On any flat
+// surface the reciprocal of distance changes linearly across the screen, so its second difference
+// left/right and up/down is about 0; at an edge (car against gravel, a window frame against the
+// room behind) it jumps. 4 depth taps.
+float knoxFlatness(float dist) {
+    if (dist <= 0.0) return 0.0;
+    vec2 texel = 1.0 / vec2(textureSize(uDepth, 0));
+    float l = knoxSceneDistance(vUv - vec2(texel.x, 0.0));
+    float r = knoxSceneDistance(vUv + vec2(texel.x, 0.0));
+    float d = knoxSceneDistance(vUv - vec2(0.0, texel.y));
+    float u = knoxSceneDistance(vUv + vec2(0.0, texel.y));
+    // Sky (-1) counts as infinitely far, a reciprocal of 0.
+    float x = abs((l > 0.0 ? dist / l : 0.0) + (r > 0.0 ? dist / r : 0.0) - 2.0);
+    float y = abs((d > 0.0 ? dist / d : 0.0) + (u > 0.0 ? dist / u : 0.0) - 2.0);
+    return 1.0 - smoothstep(0.02, 0.12, max(x, y));
 }
 
 // Linear distance for crack tests; sky counts as very far.
@@ -355,6 +384,15 @@ void main() {
     float dbgDist = knoxSceneDistance(vUv);
     fragColor = vec4(dbgDist < 0.0 ? vec3(0.6, 0.1, 0.1) : vec3(clamp(log2(max(dbgDist, 1.0)) / 12.0, 0.0, 1.0)), 1.0);
     return;
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_OCCLUSION
+    // Viewpoint's ambient occlusion: white open, black fully occluded.
+    fragColor = vec4(vec3(textureLod(uOcclusion, vUv, 0.0).a), 1.0);
+    return;
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_EDGES
+    // Where surface light is allowed: the scene greyed, silhouette edges (left alone) in red.
+    float dbgFlat = knoxFlatness(knoxSceneDistance(vUv));
+    fragColor = vec4(mix(vec3(1.0, 0.1, 0.1), vec3(knoxLuma(color)), dbgFlat), 1.0);
+    return;
 #endif
 
     float dist = knoxSceneDistance(vUv);
@@ -400,7 +438,7 @@ void main() {
     // Surface light fills shade; in rain and wet weather the sky is a flat grey, so filling with
     // it only greys the shadows. Keep most of it for clear weather.
     float wetEase = 1.0 - 0.7 * clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
-    color = mix(color, knoxSurfaceLight(color, night, farness), wetEase);
+    color = mix(color, knoxSurfaceLight(color, night, farness, knoxFlatness(dist)), wetEase);
 
     // The sky keeps Viewpoint's own colours (sunsets, clouds, stars); only golden hour touches it.
     vec3 ungraded = color;
