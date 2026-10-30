@@ -211,11 +211,13 @@ void main() {
     color += vec3(0.010, 0.010, 0.011) * night * nearBlack;
 
     // Cozy pools: at night, lit pixels lean warm (lamplight, flashlights, windows).
-    color = mix(color, color * vec3(1.12, 0.98, 0.82), OPTION_KNOX_WARMTH * night * lit);
+    // Surfaces that are already warm (orange walls, wood) get less, so rooms don't go over-orange.
+    float alreadyWarm = clamp((color.r - color.b) / max(color.r, 0.01), 0.0, 1.0);
+    color = mix(color, color * vec3(1.12, 0.98, 0.82), OPTION_KNOX_WARMTH * night * lit * (1.0 - 0.6 * alreadyWarm));
 
     // Inviting windows: at night, warm light sources (lit windows, lamps, fires) glow a little
     // brighter and more golden against the dark.
-    float warmLight = smoothstep(0.15, 0.5, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
+    float warmLight = smoothstep(0.3, 0.7, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
     color += color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight;
 
     // Gentle vignette to frame the view.
