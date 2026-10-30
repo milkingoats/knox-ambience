@@ -10,6 +10,7 @@ uniform sampler2D colortex0;
 uniform sampler2D depthtex0;
 uniform float near;
 uniform float far;
+uniform mat4 gbufferProjection; // [3][3] is 1 for an orthographic (overhead) camera, 0 for perspective
 uniform float sunAngle;
 uniform float rainStrength; // 0-1, follows the weather directly
 uniform float wetness;      // 0-1, lags behind rain
@@ -34,7 +35,11 @@ void main() {
 #endif
 
 #ifdef FOG_ENABLED
-    if (depth < 1.0) {
+    // The overhead (isometric) view is orthographic: depth there isn't distance from the eye, so
+    // distance fog would wash the whole screen. Fog is for first person only.
+    bool overhead = gbufferProjection[3][3] > 0.5;
+
+    if (depth < 1.0 && !overhead) {
         float rain = max(rainStrength, wetness * 0.5);
         float night = nightFactor(sunAngle);
 
