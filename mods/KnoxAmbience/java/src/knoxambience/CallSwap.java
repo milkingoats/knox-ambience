@@ -3,14 +3,22 @@ package knoxambience;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import net.bytebuddy.agent.builder.AgentBuilder;
 import net.bytebuddy.asm.MemberSubstitution;
 import net.bytebuddy.description.method.MethodDescription;
+import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.utility.JavaModule;
 
 import static net.bytebuddy.matcher.ElementMatchers.named;
+import static net.bytebuddy.matcher.ElementMatchers.none;
 
 /**
  * Foundation: swap one method call inside one game method for a call to our own static method.
@@ -25,7 +33,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
  *  - Its parameters must match the original call. For an instance call, the receiver comes first.
  *  - Its return type must match the original call.
  *
- * Every failure is logged and returns false. The game then keeps its stock code.
+ * Every failure is logged and reported as false. The game then keeps its stock code.
  */
 public final class CallSwap {
     private CallSwap() {}
@@ -47,35 +55,52 @@ public final class CallSwap {
     }
 
     /**
-     * Replaces each call that matches {@code call} inside {@code targetClass.inMethod} with a call to
-     * {@code replacement}. This works for classes that are already loaded (retransformation) and
-     * for classes that load later.
+     * One call to swap: each call that matches {@code call} inside {@code targetClass.inMethod} becomes a call
+     * to {@code replacement}.
      *
      * @param label a short name for the log
-     * @return true if the transformer was installed without errors
      */
-    public static boolean replace(String label, String targetClass, String inMethod,
-                                  ElementMatcher<? super MethodDescription> call, Method replacement) {
+    public record Swap(String label, String targetClass, String inMethod,
+                       ElementMatcher<? super MethodDescription> call, Method replacement) {}
+
+    /**
+     * Installs all swaps with a single ByteBuddy transformer. This works for classes that are already loaded
+     * (retransformation) and for classes that load later.
+     *
+     * One transformer, not one per swap: each installed transformer stays for the life of the JVM and looks
+     * at every later class load. It is never removed after it fires, because a later retransform by another
+     * agent would then drop our swap.
+     *
+     * @return for each swap's label, true if it was installed without errors
+     */
+    public static Map<String, Boolean> install(List<Swap> swaps) {
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        for (Swap s : swaps) result.put(s.label(), false);
+
         Instrumentation inst = instrumentation();
         if (inst == null || !inst.isRetransformClassesSupported()) {
-            System.out.println(Main.TAG + label + ": no retransform support, skipped");
-            return false;
+            for (Swap s : swaps) System.out.println(Main.TAG + s.label() + ": no retransform support, skipped");
+            return result;
         }
 
         // Code is swapped into the game class, so the game class's class loader must find our
         // replacement class. ZombieBuddy makes mod classes visible this way, but we check it first.
         // A swap that the game cannot link would crash the game later, not here.
-        if (!visibleFromGame(replacement.getDeclaringClass())) {
-            System.out.println(Main.TAG + label + ": mod classes not visible to the game loader, skipped");
-            return false;
+        Map<String, List<Swap>> byType = new LinkedHashMap<>();
+        for (Swap s : swaps) {
+            if (!visibleFromGame(s.replacement().getDeclaringClass())) {
+                System.out.println(Main.TAG + s.label() + ": mod classes not visible to the game loader, skipped");
+                continue;
+            }
+            byType.computeIfAbsent(s.targetClass(), k -> new ArrayList<>()).add(s);
         }
+        if (byType.isEmpty()) return result;
 
-        // Error flag, set by the listener below. AgentBuilder reports errors through a callback.
-        final boolean[] failed = {false};
+        // Error flags per target class, set by the listener below. AgentBuilder reports errors through a callback.
+        Set<String> failed = ConcurrentHashMap.newKeySet();
 
-        MemberSubstitution swap = MemberSubstitution.relaxed()
-                .method(call)
-                .replaceWith(replacement);
+        ElementMatcher.Junction<TypeDescription> types = none();
+        for (String name : byType.keySet()) types = types.or(named(name));
 
         try {
             new AgentBuilder.Default()
@@ -87,19 +112,31 @@ public final class CallSwap {
                         @Override
                         public void onError(String typeName, ClassLoader loader, JavaModule module,
                                             boolean loaded, Throwable t) {
-                            failed[0] = true;
-                            System.out.println(Main.TAG + label + ": transform error in " + typeName + ": " + t);
+                            failed.add(typeName);
+                            System.out.println(Main.TAG + "CallSwap: transform error in " + typeName + ": " + t);
                         }
                     })
-                    .type(named(targetClass))
-                    .transform((builder, type, loader, module, domain) ->
-                            builder.visit(swap.on(named(inMethod))))
+                    .type(types)
+                    .transform((builder, type, loader, module, domain) -> {
+                        for (Swap s : byType.getOrDefault(type.getName(), List.of())) {
+                            builder = builder.visit(MemberSubstitution.relaxed()
+                                    .method(s.call())
+                                    .replaceWith(s.replacement())
+                                    .on(named(s.inMethod())));
+                        }
+                        return builder;
+                    })
                     .installOn(inst);
         } catch (RuntimeException e) {
-            System.out.println(Main.TAG + label + ": install failed: " + e);
-            return false;
+            System.out.println(Main.TAG + "CallSwap: install failed: " + e);
+            return result;
         }
-        return !failed[0];
+
+        for (Map.Entry<String, List<Swap>> e : byType.entrySet()) {
+            boolean ok = !failed.contains(e.getKey());
+            for (Swap s : e.getValue()) result.put(s.label(), ok);
+        }
+        return result;
     }
 
     /** True if the system class loader (which loads the game) gives back this exact class. */

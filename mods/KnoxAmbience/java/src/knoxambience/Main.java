@@ -1,5 +1,9 @@
 package knoxambience;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 /**
  * Entry point, run by ZombieBuddy when the mod loads.
  *
@@ -24,8 +28,15 @@ public class Main {
         String shaderPack = ShaderPackInstall.run();
 
         // These two patches swap one call inside a game method, so they need CallSwap.
-        boolean streamer = Patch_WorldStreamer_threadLoop.install();
-        boolean alarmLog = Patch_Alarm_updateSound.install();
+        // Both go in one call, so they share one class-file transformer.
+        CallSwap.Swap streamerSwap = Patch_WorldStreamer_threadLoop.swap();
+        CallSwap.Swap alarmSwap = Patch_Alarm_updateSound.swap();
+        List<CallSwap.Swap> swaps = new ArrayList<>();
+        if (streamerSwap != null) swaps.add(streamerSwap);
+        if (alarmSwap != null) swaps.add(alarmSwap);
+        Map<String, Boolean> swapped = CallSwap.install(swaps);
+        boolean streamer = streamerSwap != null && swapped.get(streamerSwap.label());
+        boolean alarmLog = alarmSwap != null && swapped.get(alarmSwap.label());
 
         // ZombieBuddy applies the @Patch classes. We cannot see the result from here, so each one
         // prints "active" the first time it runs (see once()).

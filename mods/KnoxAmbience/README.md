@@ -64,7 +64,8 @@ one line and stands down. Set a switch to `false` to get the stock behaviour bac
 - **CallSwap** (`CallSwap.java`): replaces one method call inside one game method with a call to a
   static method of ours, through ByteBuddy `MemberSubstitution` and ZombieBuddy's Instrumentation.
   Use it when advice is not enough, because the change is in the middle of a method. Used by (a) and
-  (c). Limit: it reads a package-private ZombieBuddy field (`Loader.g_instrumentation`). If a
+  (c). Main installs all swaps in one `CallSwap.install` call, so they share one class-file transformer;
+  add new swaps to that list rather than installing them separately. Limit: it reads a package-private ZombieBuddy field (`Loader.g_instrumentation`). If a
   ZombieBuddy update renames that field, CallSwap logs it and the game keeps its stock code.
 - **Advice visibility rule**: ZombieBuddy copies advice code into the game class. Any field or method
   that an advice body touches must be `public`, or the game throws `IllegalAccessError` at run time.

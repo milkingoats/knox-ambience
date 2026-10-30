@@ -19,14 +19,15 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 public final class Patch_Alarm_updateSound {
     private Patch_Alarm_updateSound() {}
 
-    static boolean install() {
+    /** The call swap for Main to install. Null if our replacement method is missing. */
+    static CallSwap.Swap swap() {
         try {
-            return CallSwap.replace("alarm println", "zombie.iso.Alarm", "updateSound",
+            return new CallSwap.Swap("alarm println", "zombie.iso.Alarm", "updateSound",
                     named("println").and(isDeclaredBy(PrintStream.class)).and(takesArguments(int.class)),
                     Patch_Alarm_updateSound.class.getMethod("println", PrintStream.class, int.class));
         } catch (NoSuchMethodException e) {
             System.out.println(Main.TAG + "alarm println: " + e);
-            return false;
+            return null;
         }
     }
 

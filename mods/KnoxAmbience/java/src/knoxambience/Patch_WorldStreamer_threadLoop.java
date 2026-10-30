@@ -21,21 +21,22 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 public final class Patch_WorldStreamer_threadLoop {
     private Patch_WorldStreamer_threadLoop() {}
 
-    // Monitor that the streamer thread waits on. wakeRequested is only read or written while
-    // holding LOCK.
+    // Monitor that the streamer thread waits on. wakeRequested is only written while holding LOCK.
+    // It is volatile so wake() can skip the lock when a request is already pending.
     private static final Object LOCK = new Object();
-    private static boolean wakeRequested;
+    private static volatile boolean wakeRequested;
 
     private static volatile boolean seen;
 
-    static boolean install() {
+    /** The call swap for Main to install. Null if our replacement method is missing. */
+    static CallSwap.Swap swap() {
         try {
-            return CallSwap.replace("streamer wake", "zombie.iso.WorldStreamer", "threadLoop",
+            return new CallSwap.Swap("streamer wake", "zombie.iso.WorldStreamer", "threadLoop",
                     named("sleep").and(isDeclaredBy(Thread.class)).and(takesArguments(long.class)),
                     Patch_WorldStreamer_threadLoop.class.getMethod("sleep", long.class));
         } catch (NoSuchMethodException e) {
             System.out.println(Main.TAG + "streamer wake: " + e);
-            return false;
+            return null;
         }
     }
 
@@ -67,8 +68,13 @@ public final class Patch_WorldStreamer_threadLoop {
         }
     }
 
-    /** Called from the main thread when a chunk is requested. It is cheap: one short lock. */
+    /**
+     * Called from the main thread when a chunk is requested. When a request is already pending this is one
+     * field read; otherwise one short lock. Skipping is safe: the pending request was set before this chunk
+     * was queued, and the streamer clears it only before its next pass, which then sees this chunk too.
+     */
     public static void wake() {
+        if (wakeRequested) return;
         synchronized (LOCK) {
             wakeRequested = true;
             LOCK.notifyAll();

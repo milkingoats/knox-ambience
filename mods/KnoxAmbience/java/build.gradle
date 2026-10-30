@@ -13,6 +13,12 @@ java {
     }
 }
 
+// The game ships its own Java 25 runtime (jre64). Compile for exactly that, so a newer JDK fails here
+// instead of throwing UnsupportedClassVersionError in console.txt.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 25
+}
+
 repositories {
     mavenCentral()
 }
@@ -59,13 +65,15 @@ tasks.named('compileAutotestJava') {
 // The shader pack ships inside the jar; ShaderPackInstall copies it into viewpoint-shaderpacks at startup.
 // The index lists its files, because a class loader can't list a folder.
 def shaderPackDir = file("${projectDir}/../../../shaderpacks/KnoxAmbience")
+// Only pack file types ship, so a stray .bak, editor swap file or copied install marker on disk does not.
+def shaderPackFiles = ['**/*.properties', '**/*.frag', '**/*.glsl', '**/*.md']
 def shaderPackIndexDir = layout.buildDirectory.dir('generated/shaderpack')
 
 tasks.register('shaderPackIndex') {
     inputs.dir(shaderPackDir)
     outputs.dir(shaderPackIndexDir)
     doLast {
-        def lines = fileTree(shaderPackDir).files
+        def lines = fileTree(shaderPackDir) { include shaderPackFiles }.files
                 .collect { shaderPackDir.toPath().relativize(it.toPath()).toString().replace('\\', '/') }
                 .sort()
         def out = shaderPackIndexDir.get().file('shaderpack/KnoxAmbience.index').asFile
@@ -77,7 +85,10 @@ tasks.register('shaderPackIndex') {
 jar {
     archiveBaseName.set('KnoxAmbience')
     archiveVersion.set('')
-    from(shaderPackDir) { into 'shaderpack/KnoxAmbience' }
+    from(shaderPackDir) {
+        include shaderPackFiles
+        into 'shaderpack/KnoxAmbience'
+    }
     from(tasks.named('shaderPackIndex'))
 }
 
