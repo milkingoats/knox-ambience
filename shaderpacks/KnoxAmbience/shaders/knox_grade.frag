@@ -482,7 +482,9 @@ void main() {
 
     // Split tone: shadows a touch cool teal, light a touch warm, scaled by brightness.
     float toneLuma = knoxLuma(color);
-    float split = OPTION_KNOX_WARMTH / 0.35 * 0.25;
+    // Foliage (green above red and blue) is left out, or sunlit grass turns yellow-olive.
+    float foliageHue = clamp((color.g - max(color.r, color.b)) * 6.0, 0.0, 1.0);
+    float split = OPTION_KNOX_WARMTH / 0.35 * 0.25 * (1.0 - foliageHue);
     color *= mix(vec3(1.0), mix(vec3(0.93, 1.0, 1.01), vec3(1.04, 1.0, 0.95), smoothstep(0.1, 0.6, toneLuma)), split);
 
     color = mix(color, ungraded, sky);
