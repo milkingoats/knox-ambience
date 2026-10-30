@@ -448,7 +448,9 @@ void main() {
 
     // Colour, draining a little at night. Warm colours (lamps, fire, wood, brick, skin) keep more
     // of theirs than cool ones, so the muting reads as cool outdoors against warm shelter.
-    float warmHue = clamp((color.r - color.b) * 3.0, 0.0, 1.0);
+    // Red to orange only (red above both green and blue): yellow-green grass and foliage don't
+    // count, or they kept a boosted, fake-looking saturation.
+    float warmHue = clamp((color.r - max(color.g * 0.9, color.b)) * 4.0, 0.0, 1.0);
     float sat = mix(0.97, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
     sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH * 0.5);
     color = mix(vec3(knoxLuma(color)), color, sat);
