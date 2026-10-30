@@ -18,6 +18,9 @@
 #ifndef OPTION_KNOX_RAIN_FOG
 #define OPTION_KNOX_RAIN_FOG 1.0
 #endif
+#ifndef OPTION_KNOX_NIGHT_FULL
+#define OPTION_KNOX_NIGHT_FULL 0.25
+#endif
 #ifndef OPTION_KNOX_NIGHT_DARKNESS
 #define OPTION_KNOX_NIGHT_DARKNESS 0.5
 #endif
@@ -66,7 +69,7 @@ uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
 uniform vec3 uSunDir;         // unit vector, y up
-uniform float uNight;         // 0 day .. 1 night
+uniform float uNight;         // 0 day .. about 0.25 full night
 uniform float uRainStrength;  // 0 .. 1
 uniform float uRain;          // 0 .. 1, the name Viewpoint's weather shaders use
 uniform float uWet;           // 0 .. 1, lags behind rain
@@ -110,7 +113,9 @@ float knoxSceneDistance(vec2 uv) {
 // being below the horizon. An unset uSunDir (all zero) counts as day.
 float knoxNight() {
     float fromSun = length(uSunDir) > 0.5 ? 1.0 - smoothstep(-0.12, 0.08, uSunDir.y) : 0.0;
-    return clamp(max(uNight, fromSun), 0.0, 1.0);
+    // In game uNight peaks around 0.25 at full night (B42.21, Viewpoint 0.1.6.1), so rescale it.
+    float fromViewpoint = smoothstep(0.0, OPTION_KNOX_NIGHT_FULL, uNight);
+    return clamp(max(fromViewpoint, fromSun), 0.0, 1.0);
 }
 
 void main() {
