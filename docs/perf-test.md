@@ -18,6 +18,23 @@
 
 Every run is a fresh game start, so ZombieBuddy patches from one run can't leak into the next.
 
+## Baseline on a fresh world (no save, no recording)
+
+`tools/perftest/baseline.bat` needs no test save and no recorded route. Each session starts a new
+sandbox world with the player at `-Spawn` (default `10620,9550,0`, Muldraugh), then:
+
+1. takes screenshots at fixed times and weather (`-Shots`, default noon, afternoon, golden hour, sunset,
+   dusk, night, rain and fog), with the UI hidden;
+2. walks a 14-tile loop next to the spawn for 120 s (measured);
+3. spawns a fuelled car on the nearest road and drives along that road for 120 s (measured). The
+   route is worked out from the road tiles as the car goes, straight on at junctions, turning back once
+   at a dead end.
+
+It runs two sessions, Knox Ambience off then on, with only ZombieBuddy and the test mod otherwise, and
+writes the usual results plus a `shots` folder per run. The worlds are saved as
+`Saves\Sandbox\KA-baseline-<time>`; delete them when done. Pass `-Spawn x,y,z` for another spot, or
+`-Mods` for another mod list.
+
 ## One-time setup
 
 1. **Install the test mode mod.** Build it with Knox Ambience (`gradlew install`, see
