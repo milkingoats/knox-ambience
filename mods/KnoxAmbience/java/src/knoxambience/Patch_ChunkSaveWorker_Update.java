@@ -24,6 +24,12 @@ public class Patch_ChunkSaveWorker_Update {
     private static MethodHandle hotsave;
     private static boolean lookupFailed;
 
+    /** Tags frames where Update has chunks queued to save (it writes one per call). */
+    @Patch.OnEnter
+    public static void enter(@Patch.This Object self) {
+        if (FrameLog.ENABLED && !((ChunkSaveWorker) self).toSaveQueue.isEmpty()) FrameLog.mark("save.chunk");
+    }
+
     @Patch.OnExit
     public static void exit(@Patch.This Object self) {
         if (!Main.hotsaveThrottle || !Patch_ChunkSaveWorker_HotsaveAncilliarySystems.pendingDue()) return;
