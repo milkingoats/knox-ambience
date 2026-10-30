@@ -56,7 +56,7 @@
 #define OPTION_KNOX_SKY_FILL 0.3
 #endif
 #ifndef OPTION_KNOX_AO_BOUNCE
-#define OPTION_KNOX_AO_BOUNCE 0.5
+#define OPTION_KNOX_AO_BOUNCE 0.0
 #endif
 #ifndef OPTION_KNOX_RIM
 #define OPTION_KNOX_RIM 0.0
@@ -289,13 +289,15 @@ vec3 knoxLift(vec3 c, float gain) {
 // bouncing inside a corner takes on the surface's colour, so a red brick corner reads red instead
 // of grey. Viewpoint's lighting already applies multi-bounce AO, so this only shifts the hue and
 // keeps brightness: brightening again lit a pale, sparkly ring wherever AO is (round the base of
-// cars, door frames, window panes). Returns a factor with luma 1.
+// cars, door frames, window panes). Returns a factor with luma 1, kept within 10% per channel:
+// normalising to luma lets red swing far (it weighs only 0.21), and a wider range painted red
+// rings round wall lamps on red siding.
 vec3 knoxAoTint(float ao, vec3 albedo) {
     vec3 a = 2.0404 * albedo - 0.3324;
     vec3 b = -4.7951 * albedo + 0.6417;
     vec3 c = 2.7552 * albedo + 0.6903;
     vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao) / ao;
-    return clamp(bounced / max(knoxLuma(bounced), 1.0e-3), 0.7, 1.4);
+    return clamp(bounced / max(knoxLuma(bounced), 1.0e-3), 0.9, 1.1);
 }
 
 // Surface light from the G-buffer, near world only: sky fill, ground bounce, coloured AO, rim.
