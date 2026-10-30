@@ -31,12 +31,14 @@ program". That's expected: Viewpoint checks every pack folder for a Minecraft pa
 native. Don't add a `shaders.properties` to silence it, or Viewpoint will also load the folder as a
 Minecraft pack.
 
-Rolling Hills (3815630947) currently turns its hills off under any native pack it doesn't know by
-name, including this one.
+Rolling Hills (3815630947) turns its hills off under any native pack it doesn't know by name. The
+Knox Ambience Java mod tells it that packs built on Viewpoint's Default or Vivid are supported (patch
+(d) in [mods/KnoxAmbience](../../mods/KnoxAmbience/README.md)), so with the mod loaded the hills stay on.
 
 ## Performance
 
-One extra full-screen pass with two texture reads per pixel, no extra buffers. Everything heavy
+Two passes: a quarter-size glow pass and one full-screen grade pass, plus one small quarter-size
+buffer for the glow. Everything heavy
 (shadows, volumetrics, clouds) is Viewpoint's and follows Viewpoint's own quality settings.
 
 ## Why native and not a Minecraft (Iris) pack

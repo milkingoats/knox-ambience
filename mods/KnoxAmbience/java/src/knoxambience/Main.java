@@ -17,6 +17,7 @@ public class Main {
     public static volatile boolean hotsaveThrottle = true;  // (b) at most one hot save per 30 s
     public static volatile boolean alarmThrottle = true;    // (c) house alarm update every 250 ms
     public static volatile boolean alarmQuietLog = true;    // (c) drop the alarm's println on restart
+    public static volatile boolean rollingHillsCompat = true; // (d) Rolling Hills accepts packs built on default/vivid
 
     public static void main(String[] args) {
         // Viewpoint scans viewpoint-shaderpacks after we load, so the pack is in place for that scan.
