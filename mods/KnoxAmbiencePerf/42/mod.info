@@ -1,0 +1,11 @@
+name=Knox Ambience Perf
+id=KnoxAmbiencePerf
+author=milkingoats
+url=https://github.com/milkingoats/knox-ambience
+description=Smoother frame times for Project Viewpoint: small, targeted ZombieBuddy patches.
+
+require=\ZombieBuddy
+
+javaPkgName=knoxambience.perf
+javaJarFile=media/java/KnoxAmbiencePerf.jar
+ZBVersionMin=3.0.0

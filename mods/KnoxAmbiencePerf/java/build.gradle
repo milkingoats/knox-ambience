@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+}
+
+// Paths come from gradle.properties or the command line:
+//   gradle build -PpzJar=/path/to/projectzomboid.jar -PzbJar=/path/to/ZombieBuddy.jar
+def pzJar = findProperty('pzJar')
+def zbJar = findProperty('zbJar')
+if (!pzJar || !zbJar) throw new GradleException('Set pzJar and zbJar (see README.md)')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly files(zbJar)
+    compileOnly files(pzJar)
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+}
+
+jar {
+    archiveBaseName.set('KnoxAmbiencePerf')
+    archiveVersion.set('')
+}
+
+tasks.register('install', Copy) {
+    dependsOn jar
+    from jar.archiveFile
+    into "${projectDir}/../42/media/java"
+}
