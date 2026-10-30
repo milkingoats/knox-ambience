@@ -99,6 +99,7 @@
 uniform sampler2D uColor;
 uniform sampler2D uDepth;     // non-linear 0..1, 1 = sky or distant world
 uniform sampler2D uFarDepth;  // Viewpoint's distant world (far terrain, shells, trees)
+uniform sampler2D uKnoxGlow;  // knox_glow.frag: quarter-size lit areas (rgb) and brightest lights (a)
 uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
@@ -186,27 +187,25 @@ vec4 knoxSkyAbove(vec2 uv) {
     return vec4(0.0);
 }
 
-// Light from bright areas nearby on screen. Returns the soft spill colour from the wider rings
-// (anything clearly lit); halo is the glow from the inner rings, only from very bright pixels
-// (lamps, lit windows, fires).
+// Light from bright areas nearby, read from the quarter-size glow target (already blurred and
+// eased over frames). Returns the soft spill colour from the wider rings; halo is the warm glow
+// from the inner rings, only from the brightest lights (lamps, lit windows, fires).
 vec3 knoxSpill(vec2 uv, out vec3 halo) {
     vec2 size = vec2(textureSize(uColor, 0));
     vec2 aspect = vec2(size.y / size.x, 1.0);
     vec3 spill = vec3(0.0);
     halo = vec3(0.0);
-    for (int i = 0; i < 12; i++) {
-        float a = float(i) * 0.5235988 + 0.26;
+    for (int i = 0; i < 8; i++) {
+        float a = float(i) * 0.7853982 + 0.39;
         vec2 dir = vec2(cos(a), sin(a)) * aspect;
-        vec3 c0 = textureLod(uColor, uv + dir * 0.018, 0.0).rgb;
-        vec3 c1 = textureLod(uColor, uv + dir * 0.05, 0.0).rgb;
-        vec3 c2 = textureLod(uColor, uv + dir * 0.11, 0.0).rgb;
-        halo += c0 * smoothstep(0.55, 0.95, knoxLuma(c0)) * 1.4
-              + c1 * smoothstep(0.55, 0.95, knoxLuma(c1)) * 0.6;
-        spill += c1 * smoothstep(0.25, 0.75, knoxLuma(c1))
-               + c2 * smoothstep(0.25, 0.75, knoxLuma(c2));
+        vec4 g0 = textureLod(uKnoxGlow, uv + dir * 0.015, 0.0);
+        vec4 g1 = textureLod(uKnoxGlow, uv + dir * 0.045, 0.0);
+        vec4 g2 = textureLod(uKnoxGlow, uv + dir * 0.10, 0.0);
+        halo += g0.rgb * g0.a * 1.4 + g1.rgb * g1.a * 0.6;
+        spill += g1.rgb + g2.rgb;
     }
-    halo /= 24.0;
-    return spill / 24.0;
+    halo *= 2.0 / 16.0;
+    return spill / 16.0 * 1.6;
 }
 
 // Linear distance for crack tests; sky counts as very far.
