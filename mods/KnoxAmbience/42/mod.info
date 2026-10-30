@@ -8,4 +8,5 @@ require=\ZombieBuddy
 
 javaPkgName=knoxambience
 javaJarFile=media/java/KnoxAmbience.jar
-ZBVersionMin=3.0.0
+ZBVersionMin=2.3.4
+ZBVersionMax=2.99.99

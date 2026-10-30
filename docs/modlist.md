@@ -12,3 +12,7 @@ still public.
 
 - Viewpoint DLSS Frame Generation (3818838508): optional for RTX 40 cards
 - Viewpoint Shader Panini (3823639135): optional projection add-on
+
+Incompatible (we replace these; see PLAN.md decision 5):
+
+- Project Viewpoint: True Weathers & Lighting (3813908957): weather, lighting and shader pack overhaul
