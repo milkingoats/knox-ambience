@@ -75,7 +75,8 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 
 1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
 2. ~~Repo with this plan and both skeletons.~~ This change.
-3. Shader pack first pass: lighting, fog, colour grading.
+3. Shader pack first pass: weather fog, night light falloff, neutral nights, grading, debug views.
+   Code done; needs an in-game test to see which Iris uniforms Viewpoint fills.
 4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix. Code done
    (branch `perf-first-patches`); needs an in-game test.
 5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.
