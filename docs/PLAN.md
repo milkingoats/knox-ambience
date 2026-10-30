@@ -17,6 +17,14 @@ ones, plus polish.
    proprietary ("all rights reserved"): depend on it, never bundle or change it.
 3. **Our performance mod is a ZombieBuddy Java mod** that patches individual methods.
 4. **Licence:** MIT for everything in this repo.
+5. **Compete with feature add-ons, don't depend on them.** Our only prerequisites are ZombieBuddy and
+   Viewpoint. We never require another add-on on top of them. That would make us a mod for a mod of a
+   mod that needs a Java mod framework.
+   - Main rival: "Project Viewpoint: True Weathers & Lighting" (3813908957, no licence, all rights
+     reserved). It is a weather and lighting overhaul with its own shader pack, flashlight sway, fog,
+     puddles and rain on glass. We aim to replace it, not add to it. Use it for ideas only, never its code.
+   - It overlaps with our visuals work, so mark it incompatible in modlist.md.
+     Two shader packs and two flashlight systems at once is not a supported setup.
 
 Viewpoint availability was confirmed live on the Workshop on 2026-10-30 (last updated 16 Oct). It
 requires ZombieBuddy, which is also on GitHub under MIT.
@@ -29,7 +37,8 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
   better 1% lows (106→116 walking, 114→139 driving), fewer spikes (walking p99.9 18.3→11.7 ms) and a
   much lighter game thread (52→36%, 48→28%). **Aim for smoothness, not average fps.**
 - **High value**
-  - Java memory: G1 with a 4 GB heap. Launcher setting, no code. See [launcher.md](launcher.md).
+  - Java memory: a 4 GB heap. Launcher setting, no code. The game already uses ZGC on Windows 10+,
+    so switching to G1 is unverified. See [launcher.md](launcher.md).
   - Chunk streaming: wake the loader as soon as a chunk is requested (stock waits on a 140 ms timer);
     process chunks in parallel.
   - Zombie updates on worker threads; cache the lookups behind zombie state queries.
@@ -67,7 +76,16 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
 2. ~~Repo with this plan and both skeletons.~~ This change.
 3. Shader pack first pass: lighting, fog, colour grading.
-4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix.
+4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix. Code done
+   (branch `perf-first-patches`); needs an in-game test.
 5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.
 
 Building and testing need a real machine: the game's `projectzomboid.jar`, JDK 25 and a GPU.
+
+## Findings (42.21, 2026-10-30)
+
+- Single player has no timed autosave. `IngameState.saveDelay` counts up and resets every 30 s,
+  but nothing reads it. The recurring save is `ChunkSaveWorker.HotsaveAncilliarySystems()`, which
+  runs each time the chunk save queue becomes empty.
+- The installed ZombieBuddy is 2.3.4. 3.0 is beta only and moves the annotations to
+  `me.zed_0xff.zombie_buddy.annotations`.

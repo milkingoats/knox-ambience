@@ -3,10 +3,9 @@ plugins {
 }
 
 // Paths come from gradle.properties or the command line:
-//   gradle build -PpzJar=/path/to/projectzomboid.jar -PzbJar=/path/to/ZombieBuddy.jar
+//   gradlew install -PpzJar=/path/to/projectzomboid.jar -PzbJar=/path/to/ZombieBuddy.jar
 def pzJar = findProperty('pzJar')
 def zbJar = findProperty('zbJar')
-if (!pzJar || !zbJar) throw new GradleException('Set pzJar and zbJar (see README.md)')
 
 java {
     toolchain {
@@ -19,8 +18,17 @@ repositories {
 }
 
 dependencies {
-    compileOnly files(zbJar)
-    compileOnly files(pzJar)
+    // Both jars are provided at run time by the game and by ZombieBuddy, so compile against them only.
+    // Skip them when missing, so tasks that do not compile (for example `wrapper`) still work.
+    if (zbJar) compileOnly files(zbJar)
+    if (pzJar) compileOnly files(pzJar)
+}
+
+// Fail with a clear message only when we actually compile.
+tasks.named('compileJava') {
+    doFirst {
+        if (!pzJar || !zbJar) throw new GradleException('Set pzJar and zbJar (see README.md)')
+    }
 }
 
 sourceSets {
