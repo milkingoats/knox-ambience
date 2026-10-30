@@ -1,55 +1,41 @@
 # Knox Ambience shader pack
 
-An original Iris-format shader pack for Project Viewpoint, made for Zomboid's look rather than ported
-from a Minecraft pack.
+A native [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528)
+shader pack, built for Zomboid's look.
 
-Target look: overcast light, fog, dark nights, wet roads, flashlight-lit interiors, muted colour grading.
+It builds on Viewpoint's own **Default** pack (`base=default`), so Viewpoint keeps all of its
+lighting, shadows, clouds, volumetrics and fog. Knox Ambience adds one full-screen pass at the very
+end (`shaders/knox_grade.frag`) that changes the mood:
+
+- **Rain fog**: extra grey fog while it rains, closer the harder it rains.
+- **Light falloff**: nights darken dim areas harder than lit ones, so lamp and flashlight pools stay
+  bright while the street sinks.
+- **Neutral nights**: colour drains out after dusk and the cool day tint fades, so night goes dark,
+  not blue.
+- **Muted grading and rain gloom**: overcast saturation and contrast, flatter light in rain.
 
 ## Install
 
-Copy this folder (`KnoxAmbience`) into `Zomboid/viewpoint-shaderpacks/`, start the game, and pick it
-under Delete > Shaders.
+Copy this folder (`KnoxAmbience`, the one holding `pack.properties`) into
+`Zomboid/viewpoint-shaderpacks/`, restart the game, and pick **Knox Ambience** under
+Delete > Graphics > Shaders. Its options are in the same settings page, next to Viewpoint's.
 
-## What's in it
+## Performance
 
-| File | Pass | Does |
-|------|------|------|
-| `shaders/composite.fsh` | composite | Distance fog. Overcast grey by day, closer and darker in rain, neutral near-black at night |
-| `shaders/final.fsh` | final | Colour grading, rain gloom, night darkening with light falloff, dithering |
-| `shaders/lib/common.glsl` | – | Shared helpers (night factor, luma, dither noise) |
-| `shaders/settings.glsl` | – | Options shown in the shader settings screen |
-| `shaders/lang/en_us.lang` | – | Option and screen labels |
+One extra full-screen pass with two texture reads per pixel, no extra buffers. Everything heavy
+(shadows, volumetrics, clouds) is Viewpoint's and follows Viewpoint's own quality settings.
 
-### The look
+## Why native and not a Minecraft (Iris) pack
 
-- **Weather fog.** `rainStrength` (and half of `wetness`, so fog lingers after rain) pulls the fog
-  start closer, thickens it (Rain fog option) and darkens its colour.
-- **Light falloff.** At night, dim pixels are darkened more than bright ones (Light falloff option),
-  so lamps and flashlights keep their pools of light while the rest of the street sinks.
-- **No blue night.** Night fog is neutral, the cool overcast tint fades out after dusk, and
-  saturation drops a little in the dark. Nights get darker, not bluer.
-- **Rain gloom.** Rain flattens and dims the light a little.
+Under a Minecraft pack, Viewpoint hands the whole job of drawing the world to the pack: its own
+world passes stop. A pack with only fog and grading then gets an empty frame (we saw a flat blue
+screen). Packs that work there (BSL, Complementary, Bliss, Photon, Eclipse) are full renderers.
+A native pack keeps Viewpoint's renderer and only replaces what it needs.
 
-### Performance
+## Checking what Viewpoint feeds the pack
 
-Two full-screen passes and three texture reads per pixel, no extra buffers, no gbuffer or shadow
-programs. The shadow pass is Viewpoint's own and was the main driving stutter in our measurements,
-so this pack adds nothing to it. Distant rain haze is folded into the fog maths instead of a separate
-half-resolution pass, which is cheaper still. Options compile out when off.
+Set **Knox debug view** to 1 for bars along the top of the screen (top down: Viewpoint's night,
+the pack's night, rain strength, wetness), or 2 for the depth buffer. Uniforms Viewpoint doesn't
+set read as 0, which the pack treats as "clear day", so nothing breaks; it just looks plainer.
 
-## Caveats
-
-Viewpoint's Iris support is experimental and we don't yet know which uniforms it fills in. The pack
-reads `colortex0`, `depthtex0`, `near`, `far`, `sunAngle`, `rainStrength` and `wetness`. A uniform
-the game never sets reads as 0, which here means "clear day": no rain fog and no night darkening, but
-never a black screen.
-
-To check, set **Debug > Debug view**:
-
-- **Depth**: should be a smooth black (near) to white (far) gradient. Flat white or black means
-  `depthtex0` or `near`/`far` aren't filled, and fog won't work.
-- **Uniform bars**: three bars at the top of the screen, `sunAngle`, `rainStrength`, `wetness` from
-  top to bottom. `sunAngle` should creep along with the time of day and pass halfway at dusk; the
-  rain bars should grow when it rains. A bar stuck at zero means Viewpoint doesn't set that uniform.
-
-Untested in game. The shaders compile with glslangValidator (all debug modes, fog on and off).
+The pack is written from scratch. It uses Viewpoint's pack format and uniform names, never its code.

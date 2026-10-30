@@ -52,8 +52,10 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 
 ## Visuals
 
-- Viewpoint has experimental Iris shader pack support. Packs go in `Zomboid/viewpoint-shaderpacks` and
-  are picked under Delete > Shaders.
+- Viewpoint loads packs from `Zomboid/viewpoint-shaderpacks`. Native packs (`pack.properties`) show
+  under Delete > Graphics > Shaders after a restart; Minecraft (Iris) packs under Graphics > Modern.
+  **Our pack is native** (decided 2026-10-30): under an Iris pack Viewpoint stops drawing the world
+  itself, so a post-only pack shows an empty frame. Native keeps Viewpoint's renderer.
 - **We write our own pack**, not a port of a Minecraft pack (most forbid redistributing changes).
   Target look: overcast light, fog, dark nights, wet roads, flashlight-lit interiors, muted grading.
 - First-person feel is already covered by other add-ons (Immersive Camera Motion, Immersive Effects,
@@ -75,8 +77,9 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 
 1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
 2. ~~Repo with this plan and both skeletons.~~ This change.
-3. Shader pack first pass: weather fog, night light falloff, neutral nights, grading, debug views.
-   Code done; needs an in-game test to see which Iris uniforms Viewpoint fills.
+3. Shader pack: native Viewpoint pack (`base=default`) with one final-stage grade pass: rain fog,
+   night light falloff, neutral nights, grading. Needs an in-game test. Then: have the Java mod
+   copy the pack into `viewpoint-shaderpacks` on startup (it loads before Viewpoint scans).
 4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix. Code done
    (branch `perf-first-patches`); needs an in-game test.
 5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.
