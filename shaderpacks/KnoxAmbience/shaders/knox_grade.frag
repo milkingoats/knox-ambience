@@ -60,7 +60,9 @@
 #endif
 
 uniform sampler2D uColor;
-uniform sampler2D uDepth;     // non-linear 0..1, 1 = sky
+uniform sampler2D uDepth;     // non-linear 0..1, 1 = sky or distant world
+uniform sampler2D uFarDepth;  // Viewpoint's distant world (far terrain, shells, trees)
+uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
 uniform vec3 uSunDir;         // unit vector, y up
@@ -80,11 +82,27 @@ float knoxNoise(vec2 p) {
     return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
 }
 
-float knoxLinearDepth(float d) {
-    float n = max(uCamera.x, 0.01);
-    float f = max(uCamera.y, n + 1.0);
+float knoxLinearize(float d, float n, float f) {
+    n = max(n, 0.01);
+    f = max(f, n + 1.0);
     float z = d * 2.0 - 1.0;
     return (2.0 * n * f) / (f + n - z * (f - n));
+}
+
+float knoxLinearDepth(float d) {
+    return knoxLinearize(d, uCamera.x, uCamera.y);
+}
+
+// Distance to what's drawn at this pixel, near world first, then Viewpoint's distant world.
+// Returns -1 for sky.
+float knoxSceneDistance(vec2 uv) {
+    float d = texture(uDepth, uv).r;
+    if (d < 1.0) return knoxLinearDepth(d);
+    if (uFarRange.x > 0.0) {
+        float fd = texture(uFarDepth, uv).r;
+        if (fd < 1.0) return knoxLinearize(fd, uFarRange.x, uFarRange.y);
+    }
+    return -1.0;
 }
 
 // Night amount. Prefer Viewpoint's uNight; if a pass doesn't get it, fall back to the sun
@@ -107,18 +125,19 @@ void main() {
         return;
     }
 #elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_DEPTH
-    float dbgDepth = texture(uDepth, vUv).r;
-    fragColor = vec4(vec3(dbgDepth < 1.0 ? knoxLinearDepth(dbgDepth) / max(uCamera.y, 1.0) : 1.0), 1.0);
+    // Distance on a log scale (1 m dark .. 4 km white); sky is red.
+    float dbgDist = knoxSceneDistance(vUv);
+    fragColor = vec4(dbgDist < 0.0 ? vec3(0.6, 0.1, 0.1) : vec3(clamp(log2(max(dbgDist, 1.0)) / 12.0, 0.0, 1.0)), 1.0);
     return;
 #endif
 
     // Rain fog on top of Viewpoint's own fog. Starts at a share of Viewpoint's fog start and
     // thickens with distance; no rain, no extra fog.
-    float depth = texture(uDepth, vUv).r;
-    if (rain > 0.0 && depth < 1.0) {
+    float dist = knoxSceneDistance(vUv);
+    if (rain > 0.0 && dist >= 0.0) {
         vec2 range = uFogRange.y > uFogRange.x + 1.0 ? uFogRange : vec2(30.0, 300.0);
         float start = range.x * (1.0 - 0.7 * rain);
-        float t = max(knoxLinearDepth(depth) - start, 0.0) / (range.y - start);
+        float t = max(dist - start, 0.0) / (range.y - start);
         float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.6;
         vec3 fogColor = mix(vec3(0.52, 0.54, 0.56), vec3(0.025, 0.026, 0.028), night);
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
@@ -126,7 +145,7 @@ void main() {
 
     // The sky gets half the grade, so Viewpoint's clouds stay soft and pale instead of smudging grey.
     vec3 ungraded = color;
-    float sky = depth >= 0.99999 ? 0.5 : 0.0;
+    float sky = dist < 0.0 ? 0.5 : 0.0;
 
     // Muted colour, draining further at night so nights go grey-dark rather than blue.
     // Warm colours (lamps, fire, wood, brick, skin) keep more of their colour than cool ones, so

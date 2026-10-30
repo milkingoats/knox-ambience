@@ -30,9 +30,9 @@ float fogAt(float d, vec2 range) {
     return f * clamp(OPTION_KNOX_FOG_STRENGTH, 0.0, 1.0);
 }
 
-// h: distance from the eye. haze: Viewpoint's haze scale and base.
+// h: distance from the eye. haze.x: Viewpoint's haze distance scale, haze.y: where haze starts.
 float hazeAt(float h, vec2 haze) {
-    float f = 1.0 - exp(-max(h, 0.0) * max(haze.x, 0.0) * OPTION_KNOX_FOG_HAZE);
+    float f = 1.0 - exp(-max(h - haze.y, 0.0) / max(haze.x, 1.0) * OPTION_KNOX_FOG_HAZE);
     return f * clamp(OPTION_KNOX_FOG_STRENGTH, 0.0, 1.0);
 }
 
