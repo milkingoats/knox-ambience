@@ -33,9 +33,15 @@ annotations to another package, so `mod.info` limits the jar to ZombieBuddy 2.x.
 | (b) At most one hot save per 30 s | `ChunkSaveWorker.HotsaveAncilliarySystems`, `ChunkSaveWorker.Update` | OnEnter skipOn advice delays the save; OnExit advice on `Update` runs the delayed save once it is due | to test in game |
 | (c) House alarm update every 250 ms, not every frame | `AmbientStreamManager.update`, `Alarm.update` | OnEnter advice sets a 250 ms tick; OnEnter skipOn advice skips `Alarm.update` between ticks | to test in game |
 | (c) Drop the alarm's debug print | `Alarm.updateSound` | CallSwap: `PrintStream.println(int)` → no-op | to test in game |
+| (d) Rolling Hills keeps its hills on under packs built on Viewpoint's Default or Vivid | `wt.rollinghills.TrueWeatherCompat.supports` (Rolling Hills) | OnExit advice: if it says no, `ShaderPackBase` walks the active pack's `base=` chain and answers yes when it reaches normal, default or vivid | to test in game |
 
 Each patch has a switch in `Main` (`streamerWake`, `hotsaveThrottle`, `alarmThrottle`,
-`alarmQuietLog`). Set a switch to `false` to get the stock behaviour back.
+`alarmQuietLog`, `rollingHillsCompat`).
+
+Patches into other mods (d) are thin shims: the advice only forwards to a public method in our own code,
+and our code reads the other mod's objects by reflection. If a mod update renames the hooked method,
+the shim doesn't bind and that mod behaves as it would without us; if the fields change, our code logs
+one line and stands down. Set a switch to `false` to get the stock behaviour back.
 
 ### What to look for in `Zomboid/console.txt`
 
