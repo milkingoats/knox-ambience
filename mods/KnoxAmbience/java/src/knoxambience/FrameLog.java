@@ -61,7 +61,8 @@ public final class FrameLog {
     }
 
     /** Called once per frame from the main thread (see {@link Patch_Core_EndFrameUI}). */
-    static void endFrame() {
+    // Public: Patch_Core_EndFrameUI's advice is copied into zombie.core.Core and calls this from there.
+    public static void endFrame() {
         if (!ENABLED) return;
         long now = System.nanoTime();
         if (!started) {
