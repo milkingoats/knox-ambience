@@ -79,8 +79,8 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
 2. ~~Repo with this plan and both skeletons.~~ This change.
 3. Shader pack: native Viewpoint pack (`base=default`) with one final-stage grade pass: rain fog,
-   night light falloff, neutral nights, grading. Needs an in-game test. Then: have the Java mod
-   copy the pack into `viewpoint-shaderpacks` on startup (it loads before Viewpoint scans).
+   night light falloff, neutral nights, grading. Needs an in-game test. The Java mod copies the
+   pack into `viewpoint-shaderpacks` on startup (it loads before Viewpoint scans); needs an in-game test.
 4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix. Code done
    (branch `perf-first-patches`); needs an in-game test.
 5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.

@@ -63,6 +63,21 @@ Each patch has a switch in `Main` (`streamerWake`, `hotsaveThrottle`, `alarmThro
 - **Advice visibility rule**: ZombieBuddy copies advice code into the game class. Any field or method
   that an advice body touches must be `public`, or the game throws `IllegalAccessError` at run time.
 
+## Shader pack auto-install
+
+The jar carries the Knox Ambience shader pack (`shaderpacks/KnoxAmbience`, bundled by the build).
+At startup `ShaderPackInstall` copies it into `Zomboid/viewpoint-shaderpacks/KnoxAmbience/`, before
+Viewpoint scans that folder, so players only need to pick **Knox Ambience** under Delete > Graphics >
+Shaders. `console.txt` shows one line: `[KnoxAmbience] shader pack: installed / updated / up to date / left as is ...`.
+
+- It writes `.knoxambience-install` into the pack folder: the SHA-256 of each file it wrote. A new
+  mod version updates the folder only if those files are untouched.
+- A folder someone edited, or copied by hand with different files, is left alone and the log says
+  so. Delete the folder to get the bundled pack back.
+- `-Dknoxambience.shaderpack.install=false` turns it off. `-Dknoxambience.shaderpack.dir=<path>` points
+  it at another `viewpoint-shaderpacks` folder. Like other JVM flags, these go in ZombieBuddy's
+  `ProjectZomboid64.bat`.
+
 ## Frame log (debug)
 
 `FrameLog` writes per-frame timings to CSV when the game runs with `-Dknoxambience.framelog=true`.

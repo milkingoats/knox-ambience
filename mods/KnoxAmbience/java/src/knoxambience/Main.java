@@ -5,7 +5,8 @@ package knoxambience;
  *
  * ZombieBuddy finds every class in this package that has a @Patch annotation and applies it by itself.
  * Two patches change a single call inside a game method. Advice cannot do that, so they go through
- * CallSwap. Main installs those two and prints one load report.
+ * CallSwap. Main installs those two, copies our shader pack into viewpoint-shaderpacks (ShaderPackInstall)
+ * and prints the load report.
  */
 public class Main {
     public static final String TAG = "[KnoxAmbience] ";
@@ -18,6 +19,9 @@ public class Main {
     public static volatile boolean alarmQuietLog = true;    // (c) drop the alarm's println on restart
 
     public static void main(String[] args) {
+        // Viewpoint scans viewpoint-shaderpacks after we load, so the pack is in place for that scan.
+        String shaderPack = ShaderPackInstall.run();
+
         // These two patches swap one call inside a game method, so they need CallSwap.
         boolean streamer = Patch_WorldStreamer_threadLoop.install();
         boolean alarmLog = Patch_Alarm_updateSound.install();
@@ -27,6 +31,7 @@ public class Main {
         System.out.println(TAG + "loaded. call swaps: streamer wake=" + ok(streamer)
                 + ", alarm println=" + ok(alarmLog)
                 + ". advice patches report 'active' on first use: addJob, hot save throttle, alarm tick.");
+        System.out.println(TAG + "shader pack: " + shaderPack);
     }
 
     private static String ok(boolean b) {
