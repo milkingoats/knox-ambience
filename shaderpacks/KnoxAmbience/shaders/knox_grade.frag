@@ -389,7 +389,7 @@ void main() {
     if (rain > 0.0 && dist >= 0.0) {
         float start = fogRange.x * (1.0 - 0.7 * rain);
         float t = max(dist - start, 0.0) / (fogRange.y - start);
-        float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.6;
+        float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.4;
         // Viewpoint's own fog colour when we get it, so rain fog matches the sky; grey otherwise.
         vec3 baseFog = dot(uFogColor, vec3(1.0)) > 0.03 ? mix(uFogColor, vec3(knoxLuma(uFogColor)), 0.3)
                                                          : vec3(0.52, 0.54, 0.56);
@@ -397,7 +397,10 @@ void main() {
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
 
-    color = knoxSurfaceLight(color, night, farness);
+    // Surface light fills shade; in rain and wet weather the sky is a flat grey, so filling with
+    // it only greys the shadows. Keep most of it for clear weather.
+    float wetEase = 1.0 - 0.7 * clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
+    color = mix(color, knoxSurfaceLight(color, night, farness), wetEase);
 
     // The sky keeps Viewpoint's own colours (sunsets, clouds, stars); only golden hour touches it.
     vec3 ungraded = color;
@@ -463,7 +466,8 @@ void main() {
     // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
     // instead of clipping.
     // A little extra at night outdoors, so moonlit scenes keep deep shadows rather than going flat.
-    float contrast = OPTION_KNOX_CONTRAST + 0.12 * night * (1.0 - sky);
+    // Extra in rain too, so overcast scenes keep depth instead of going milky.
+    float contrast = OPTION_KNOX_CONTRAST + (0.12 * night + 0.1 * muted) * (1.0 - sky);
     vec3 contrasted = (color - 0.5) * contrast + 0.5;
     color = mix(contrasted, color, smoothstep(0.6, 0.95, knoxLuma(color)));
 
@@ -505,14 +509,14 @@ void main() {
         color = 1.0 - (1.0 - color) * (1.0 - glare);
     }
 
-    // Rain: flatter, dimmer light. Follows the live rain, not wetness (which stays high indoors
+    // Rain: dimmer light. Follows the live rain, not wetness (which stays high indoors
     // and after a shower), and fades out at close range so interiors stay crisp. Eased off where
     // the scene is already dark, so stormy nights aren't dimmed twice.
     float outside = sky > 0.5 ? 1.0 : smoothstep(3.0, 15.0, dist);
     float gloom = OPTION_KNOX_RAIN_GLOOM * smoothstep(0.0, 0.25, rainNow) * outside
                 * smoothstep(0.03, 0.35, knoxLuma(color));
-    color = mix(color, vec3(knoxLuma(color)), gloom * 0.5);
-    color *= 1.0 - gloom * 0.4;
+    // Dimmer only: saturation is already muted for rain above, and greying it again went milky.
+    color *= 1.0 - gloom * 0.3;
 
     // Optional extra night darkness (off by default) with light falloff: dim pixels lose more than
     // lit ones. Pixels that are already near-black skip the falloff.
