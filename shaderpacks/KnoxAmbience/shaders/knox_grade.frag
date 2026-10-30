@@ -15,6 +15,8 @@
 //   time of day only, so it never flickers as things move on screen. The sky is left alone.
 // - Light spill and lamp halos: bright areas (a lit doorway, a lamp, a window) bleed soft light
 //   into the dark around them, and the brightest get a warm halo.
+// - Surface light: sky fill on shadowed up-facing surfaces and warm ground bounce on walls,
+//   coloured bounce in ambient-occluded corners, and a soft rim on edges facing away from us.
 // - Sun glow: by day the sun and the clouds it lights glow softly over the scene around them,
 //   warmer towards sunrise and sunset.
 // - Colour: weather-driven saturation (clear is vivid, rain is muted), neutral darks, silver
@@ -28,7 +30,7 @@
 // effect here treats 0 as "clear day", so a missing uniform gives a plain look, never a broken one.
 
 #ifndef OPTION_KNOX_HORIZON_BLEND
-#define OPTION_KNOX_HORIZON_BLEND 0.7
+#define OPTION_KNOX_HORIZON_BLEND 0.5
 #endif
 #ifndef OPTION_KNOX_RAIN_FOG
 #define OPTION_KNOX_RAIN_FOG 1.0
@@ -46,13 +48,22 @@
 #define OPTION_KNOX_LAMP_HALO 0.5
 #endif
 #ifndef OPTION_KNOX_SUN_GLOW
-#define OPTION_KNOX_SUN_GLOW 0.5
+#define OPTION_KNOX_SUN_GLOW 0.35
+#endif
+#ifndef OPTION_KNOX_SKY_FILL
+#define OPTION_KNOX_SKY_FILL 0.3
+#endif
+#ifndef OPTION_KNOX_AO_BOUNCE
+#define OPTION_KNOX_AO_BOUNCE 0.5
+#endif
+#ifndef OPTION_KNOX_RIM
+#define OPTION_KNOX_RIM 0.0
 #endif
 #ifndef OPTION_KNOX_SHADOW_LIFT
 #define OPTION_KNOX_SHADOW_LIFT 0.2
 #endif
 #ifndef OPTION_KNOX_CLARITY
-#define OPTION_KNOX_CLARITY 0.3
+#define OPTION_KNOX_CLARITY 0.15
 #endif
 #ifndef OPTION_KNOX_NIGHT_DARKNESS
 #define OPTION_KNOX_NIGHT_DARKNESS 0.0
@@ -67,16 +78,16 @@
 #define OPTION_KNOX_SATURATION 0.9
 #endif
 #ifndef OPTION_KNOX_CONTRAST
-#define OPTION_KNOX_CONTRAST 1.05
+#define OPTION_KNOX_CONTRAST 1.08
 #endif
 #ifndef OPTION_KNOX_HIGHLIGHTS
-#define OPTION_KNOX_HIGHLIGHTS 0.5
+#define OPTION_KNOX_HIGHLIGHTS 0.3
 #endif
 #ifndef OPTION_KNOX_WARMTH
 #define OPTION_KNOX_WARMTH 0.35
 #endif
 #ifndef OPTION_KNOX_GOLDEN_HOUR
-#define OPTION_KNOX_GOLDEN_HOUR 0.6
+#define OPTION_KNOX_GOLDEN_HOUR 0.45
 #endif
 #ifndef OPTION_KNOX_WINDOW_GLOW
 #define OPTION_KNOX_WINDOW_GLOW 0.6
@@ -97,6 +108,9 @@
 #ifndef OPTION_KNOX_DEBUG_DEPTH
 #define OPTION_KNOX_DEBUG_DEPTH 2
 #endif
+#ifndef OPTION_KNOX_DEBUG_NORMALS
+#define OPTION_KNOX_DEBUG_NORMALS 3
+#endif
 #ifndef OPTION_KNOX_DEBUG
 #define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
 #endif
@@ -104,7 +118,18 @@
 uniform sampler2D uColor;
 uniform sampler2D uDepth;     // non-linear 0..1, 1 = sky or distant world
 uniform sampler2D uFarDepth;  // Viewpoint's distant world (far terrain, shells, trees)
-uniform sampler2D uKnoxGlow;  // knox_glow.frag: quarter-size lit areas or sun glow (rgb), brightest lights (a)
+// Bloom pyramid: knox_glow.frag at quarter size, then halved three times by knox_down*.frag.
+// rgb is the bloom seed (brightest lights at night, bright sky by day), a the light spill amount.
+uniform sampler2D uKnoxGlow;
+uniform sampler2D uKnoxBloom8;
+uniform sampler2D uKnoxBloom16;
+uniform sampler2D uKnoxBloom32;
+uniform sampler2D uNormal;    // Viewpoint's G-buffer: surface normal in rgb (world space, y up)
+uniform sampler2D uAlbedo;    // Viewpoint's G-buffer: surface colour in rgb
+uniform sampler2D uOcclusion; // Viewpoint's ambient occlusion: a = 1 open .. 0 fully occluded
+uniform mat4 uInvViewProjection;
+uniform vec3 uEye;            // camera position, world space
+uniform vec3 uSunColor;
 uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
@@ -112,7 +137,7 @@ uniform vec3 uFogColor;       // Viewpoint's fog colour (follows the sky); 0 if 
 uniform vec3 uSunDir;         // unit vector, y up
 uniform float uNight;         // 0 day .. about 0.3 full night
 uniform float uRainStrength;  // 0 .. 1
-uniform float uRain;          // 0 .. 1, the name Viewpoint's weather shaders use
+uniform float uRain;          // 0 .. 1, the name Viewpoint sets for pack passes
 uniform float uWet;           // 0 .. 1, lags behind rain
 
 in vec2 vUv;
@@ -192,41 +217,91 @@ vec4 knoxSkyAbove(vec2 uv) {
     return vec4(0.0);
 }
 
-// Light from bright areas nearby, read from the quarter-size glow target (already blurred and
-// eased over frames). Returns the soft spill colour from the wider rings; halo is the warm glow
-// from the inner rings, only from the brightest lights (lamps, lit windows, fires).
-vec3 knoxSpill(vec2 uv, out vec3 halo) {
-    vec2 size = vec2(textureSize(uColor, 0));
-    vec2 aspect = vec2(size.y / size.x, 1.0);
-    vec3 spill = vec3(0.0);
-    halo = vec3(0.0);
-    for (int i = 0; i < 8; i++) {
-        float a = float(i) * 0.7853982 + 0.39;
-        vec2 dir = vec2(cos(a), sin(a)) * aspect;
-        vec4 g0 = textureLod(uKnoxGlow, uv + dir * 0.015, 0.0);
-        vec4 g1 = textureLod(uKnoxGlow, uv + dir * 0.045, 0.0);
-        vec4 g2 = textureLod(uKnoxGlow, uv + dir * 0.10, 0.0);
-        halo += g0.rgb * g0.a * 1.4 + g1.rgb * g1.a * 0.6;
-        spill += g1.rgb + g2.rgb;
-    }
-    halo *= 2.0 / 16.0;
-    return spill / 16.0 * 1.6;
+// One bloom level, upsampled with a 3 x 3 tent so the coarse levels stay smooth.
+vec4 knoxTent(sampler2D level, vec2 uv) {
+    vec2 t = 1.0 / vec2(textureSize(level, 0));
+    vec4 sum = textureLod(level, uv, 0.0) * 4.0;
+    sum += (textureLod(level, uv + vec2(t.x, 0.0), 0.0) + textureLod(level, uv - vec2(t.x, 0.0), 0.0)
+          + textureLod(level, uv + vec2(0.0, t.y), 0.0) + textureLod(level, uv - vec2(0.0, t.y), 0.0)) * 2.0;
+    sum += textureLod(level, uv + t, 0.0) + textureLod(level, uv - t, 0.0)
+         + textureLod(level, uv + vec2(t.x, -t.y), 0.0) + textureLod(level, uv + vec2(-t.x, t.y), 0.0);
+    return sum / 16.0;
 }
 
-// Sun glow: the bright sky from the glow target, spread wide (out to a fifth of the screen).
-// By day the glow target's rgb holds only the bright sky, so this never picks up lit walls.
-vec3 knoxSunGlow(vec2 uv) {
-    vec2 size = vec2(textureSize(uColor, 0));
-    vec2 aspect = vec2(size.y / size.x, 1.0);
-    vec3 glow = textureLod(uKnoxGlow, uv, 0.0).rgb;
-    for (int i = 0; i < 8; i++) {
-        float a = float(i) * 0.7853982;
-        vec2 dir = vec2(cos(a), sin(a)) * aspect;
-        glow += textureLod(uKnoxGlow, uv + dir * 0.03, 0.0).rgb * 0.8
-              + textureLod(uKnoxGlow, uv + dir * 0.09, 0.0).rgb * 0.5
-              + textureLod(uKnoxGlow, uv + dir * 0.2, 0.0).rgb * 0.3;
+// Soft shoulder: values above 0.8 roll off towards 1 instead of clipping.
+vec3 knoxShoulder(vec3 x) {
+    vec3 over = max(x - 0.8, 0.0);
+    return min(x, vec3(0.8)) + 0.2 * (1.0 - exp(-over / 0.2));
+}
+
+// Adds light through the soft shoulder, so glows over bright pixels roll off smoothly instead of
+// clipping to flat white. With nothing added, the pixel is returned unchanged.
+vec3 knoxAddLight(vec3 base, vec3 add) {
+    return base + knoxShoulder(base + add) - knoxShoulder(base);
+}
+
+// Night vision exposure lift that keeps each colour's hue: scales the whole pixel by its brightest
+// channel through an extended Reinhard curve, so dark pixels are lifted by about the gain and full
+// white stays white. A gain of 1 returns the pixel unchanged.
+vec3 knoxLift(vec3 c, float gain) {
+    float m = max(max(c.r, c.g), c.b);
+    if (m <= 1.0e-4 || gain <= 1.0) return c;
+    float l = gain * m;
+    float mapped = l * (1.0 + l / (gain * gain)) / (1.0 + l);
+    return c * (mapped / m);
+}
+
+// Ambient occlusion with coloured multi-bounce (Jimenez et al. 2016 fit): light bouncing inside a
+// corner takes on the surface's colour, so occluded corners of a red brick wall read deep red
+// instead of grey. Returns the factor to apply on top of an image that already has plain AO.
+vec3 knoxAoBounce(float ao, vec3 albedo) {
+    vec3 a = 2.0404 * albedo - 0.3324;
+    vec3 b = -4.7951 * albedo + 0.6417;
+    vec3 c = 2.7552 * albedo + 0.6903;
+    vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao);
+    return clamp(bounced / ao, 1.0, 2.0);
+}
+
+// Surface light from the G-buffer, near world only: sky fill, ground bounce, coloured AO, rim.
+// Every part is 0 at its option's 0, and pixels without a normal are left alone.
+vec3 knoxSurfaceLight(vec3 color, float night, float farness) {
+    if (textureLod(uDepth, vUv, 0.0).r >= 1.0) return color;
+    vec3 n = textureLod(uNormal, vUv, 0.0).rgb;
+    if (dot(n, n) < 0.25) return color;
+    n = normalize(n);
+    vec4 surface = textureLod(uAlbedo, vUv, 0.0);
+    vec3 albedo = surface.rgb;
+    float foliage = step(0.9, surface.a);  // Viewpoint marks foliage with alpha 1
+    float day = 1.0 - night;
+    float near = 1.0 - farness;
+    float luma = knoxLuma(color);
+
+    // Coloured bounce in occluded corners.
+    float ao = textureLod(uOcclusion, vUv, 0.0).a;
+    if (OPTION_KNOX_AO_BOUNCE > 0.0 && ao > 0.05 && ao < 0.999) {
+        color *= mix(vec3(1.0), knoxAoBounce(ao, albedo), OPTION_KNOX_AO_BOUNCE * near);
     }
-    return glow / 13.8;
+
+    // Sky fill and ground bounce, only into shade: up-facing shadowed surfaces take a little of
+    // the sky's colour, walls a little warm light bounced off the sunlit ground.
+    vec3 sun = uSunColor / max(max(max(uSunColor.r, uSunColor.g), uSunColor.b), 1.0);
+    vec3 skyColor = dot(uFogColor, vec3(1.0)) > 0.03 ? uFogColor : vec3(0.45, 0.55, 0.7);
+    float shade = 1.0 - smoothstep(0.08, 0.4, luma);
+    float up = max(n.y, 0.0);
+    vec3 fill = skyColor * up * 0.5 + 0.2 * (skyColor + sun) * (1.0 - n.y) * 0.5;
+    color = knoxAddLight(color, albedo * fill * OPTION_KNOX_SKY_FILL * 0.35 * shade * day * near);
+
+    // Rim: edges turning away from the camera catch a little sky and sun light. None on floors
+    // and roofs, which face up.
+    if (OPTION_KNOX_RIM > 0.0 && uInvViewProjection[3][3] != 0.0) {
+        vec4 world = uInvViewProjection * vec4(vUv * 2.0 - 1.0, textureLod(uDepth, vUv, 0.0).r * 2.0 - 1.0, 1.0);
+        vec3 view = normalize(uEye - world.xyz / world.w);
+        // Foliage gets little, or grass and leaves would sparkle.
+        float rim = pow(1.0 - max(dot(n, view), 0.0), 3.0) * (1.0 - up) * (1.0 - 0.8 * foliage);
+        vec3 rimColor = mix(skyColor, sun, 0.5);
+        color = knoxAddLight(color, rimColor * rim * OPTION_KNOX_RIM * 0.3 * mix(0.3, 1.0, day) * near);
+    }
+    return color;
 }
 
 // Linear distance for crack tests; sky counts as very far.
@@ -270,6 +345,11 @@ void main() {
         fragColor = vec4(vUv.x < v ? vec3(1.0, 0.8, 0.1) : vec3(0.1), 1.0);
         return;
     }
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_NORMALS
+    // Surface normals as colour (x red, y green, z blue, mapped from -1..1); a green floor means
+    // the normals are world space with y up.
+    fragColor = vec4(normalize(textureLod(uNormal, vUv, 0.0).rgb + 1.0e-5) * 0.5 + 0.5, 1.0);
+    return;
 #elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_DEPTH
     // Distance on a log scale (1 m dark .. 4 km white); sky is red.
     float dbgDist = knoxSceneDistance(vUv);
@@ -285,6 +365,11 @@ void main() {
     dist = filled.w;
     float sky = dist < 0.0 ? 1.0 : 0.0;
     vec2 fogRange = uFogRange.y > uFogRange.x + 1.0 ? uFogRange : vec2(30.0, 300.0);
+    // In fog weather Viewpoint pulls its fog range in to a few metres, and its own fog already
+    // hides the distance. Our distance effects (horizon blend, rain fog, and the fade-outs of
+    // night vision, spill and clarity) keep to a clear-weather range, or the whole view would
+    // count as far away and wash into the sky colour on top of Viewpoint's fog.
+    fogRange = max(fogRange, vec2(40.0, 250.0));
 
     // Horizon blend: distant land takes on the sky colour right above it. At night this pulls the
     // far world down into the dark sky instead of leaving a glowing band.
@@ -304,13 +389,18 @@ void main() {
     if (rain > 0.0 && dist >= 0.0) {
         float start = fogRange.x * (1.0 - 0.7 * rain);
         float t = max(dist - start, 0.0) / (fogRange.y - start);
-        float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.6;
+        float fog = (1.0 - exp(-3.0 * t * t)) * rain * clamp(OPTION_KNOX_RAIN_FOG, 0.0, 2.0) * 0.4;
         // Viewpoint's own fog colour when we get it, so rain fog matches the sky; grey otherwise.
         vec3 baseFog = dot(uFogColor, vec3(1.0)) > 0.03 ? mix(uFogColor, vec3(knoxLuma(uFogColor)), 0.3)
                                                          : vec3(0.52, 0.54, 0.56);
         vec3 fogColor = mix(baseFog, vec3(0.025, 0.026, 0.028), night);
         color = mix(color, fogColor, clamp(fog, 0.0, 0.9));
     }
+
+    // Surface light fills shade; in rain and wet weather the sky is a flat grey, so filling with
+    // it only greys the shadows. Keep most of it for clear weather.
+    float wetEase = 1.0 - 0.7 * clamp(max(rainNow * 4.0, uWet * 0.7), 0.0, 1.0);
+    color = mix(color, knoxSurfaceLight(color, night, farness), wetEase);
 
     // The sky keeps Viewpoint's own colours (sunsets, clouds, stars); only golden hour touches it.
     vec3 ungraded = color;
@@ -321,17 +411,24 @@ void main() {
     // The deepest darks are kept out of the lift, so night keeps its contrast instead of turning
     // into a milky haze.
     float gain = 1.0 + 1.4 * OPTION_KNOX_ADAPTATION * night * (1.0 - farness);
-    vec3 lifted = color * gain / (1.0 + color * (gain - 1.0));
-    color = mix(color, lifted, smoothstep(0.015, 0.12, knoxLuma(color)));
+    color = mix(color, knoxLift(color, gain), smoothstep(0.015, 0.12, knoxLuma(color)));
 
-    // Light spill into darker pixels, and warm halos around the brightest lights.
-    vec3 halo;
-    vec3 spill = knoxSpill(vUv, halo);
+    // The bloom pyramid, one tent tap per level.
+    vec4 bloom4 = knoxTent(uKnoxGlow, vUv);
+    vec4 bloom8 = knoxTent(uKnoxBloom8, vUv);
+    vec4 bloom16 = knoxTent(uKnoxBloom16, vUv);
+    vec4 bloom32 = knoxTent(uKnoxBloom32, vUv);
+
+    // Light spill into darker pixels from the wide levels, and halos around the brightest lights,
+    // tight near the light with a long soft tail.
+    vec3 spill = (bloom8.a * 0.5 + bloom16.a * 0.35 + bloom32.a * 0.15) * vec3(1.0, 0.86, 0.68) * 1.6;
+    vec3 halo = (bloom4.rgb * 0.45 + bloom8.rgb * 0.3 + bloom16.rgb * 0.17 + bloom32.rgb * 0.08)
+              * vec3(1.0, 0.92, 0.8) * 1.5;
     float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
     // Both are night effects: by day, bright doorways and sunlit walls would bloom into soft white
     // blobs on the surfaces around them.
-    color += spill * OPTION_KNOX_LIGHT_SPILL * night * 0.45 * spillRoom * (1.0 - farness);
-    color += halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * night * 0.5;
+    color = knoxAddLight(color, spill * OPTION_KNOX_LIGHT_SPILL * night * 0.45 * spillRoom * (1.0 - farness)
+                              + halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * night * 0.5);
 
     // Clarity: a little local contrast against a small blur, so surfaces read crisp. Eased off
     // at night, where it would make grass shimmer.
@@ -351,9 +448,11 @@ void main() {
 
     // Colour, draining a little at night. Warm colours (lamps, fire, wood, brick, skin) keep more
     // of theirs than cool ones, so the muting reads as cool outdoors against warm shelter.
-    float warmHue = clamp((color.r - color.b) * 3.0, 0.0, 1.0);
-    float sat = mix(1.02, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
-    sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH);
+    // Red to orange only (red above both green and blue): yellow-green grass and foliage don't
+    // count, or they kept a boosted, fake-looking saturation.
+    float warmHue = clamp((color.r - max(color.g * 0.9, color.b)) * 4.0, 0.0, 1.0);
+    float sat = mix(0.97, OPTION_KNOX_SATURATION, muted) * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
+    sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH * 0.5);
     color = mix(vec3(knoxLuma(color)), color, sat);
 
     // Dark areas lose their colour cast whatever the time of day says (dusk skies tint the shadows
@@ -369,7 +468,8 @@ void main() {
     // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
     // instead of clipping.
     // A little extra at night outdoors, so moonlit scenes keep deep shadows rather than going flat.
-    float contrast = OPTION_KNOX_CONTRAST + 0.12 * night * (1.0 - sky);
+    // Extra in rain too, so overcast scenes keep depth instead of going milky.
+    float contrast = OPTION_KNOX_CONTRAST + (0.12 * night + 0.1 * muted) * (1.0 - sky);
     vec3 contrasted = (color - 0.5) * contrast + 0.5;
     color = mix(contrasted, color, smoothstep(0.6, 0.95, knoxLuma(color)));
 
@@ -382,7 +482,9 @@ void main() {
 
     // Split tone: shadows a touch cool teal, light a touch warm, scaled by brightness.
     float toneLuma = knoxLuma(color);
-    float split = OPTION_KNOX_WARMTH / 0.35 * 0.5;
+    // Foliage (green above red and blue) is left out, or sunlit grass turns yellow-olive.
+    float foliageHue = clamp((color.g - max(color.r, color.b)) * 6.0, 0.0, 1.0);
+    float split = OPTION_KNOX_WARMTH / 0.35 * 0.25 * (1.0 - foliageHue);
     color *= mix(vec3(1.0), mix(vec3(0.93, 1.0, 1.01), vec3(1.04, 1.0, 0.95), smoothstep(0.1, 0.6, toneLuma)), split);
 
     color = mix(color, ungraded, sky);
@@ -406,18 +508,19 @@ void main() {
     float sunAmount = OPTION_KNOX_SUN_GLOW * (1.0 - night) * (1.0 - 0.7 * muted);
     if (sunAmount > 0.0) {
         vec3 tint = mix(vec3(1.0, 0.95, 0.86), vec3(1.0, 0.74, 0.5), knoxGoldenHour());
-        vec3 glare = clamp(knoxSunGlow(vUv) * tint * sunAmount * 1.2, 0.0, 1.0);
+        vec3 sunGlow = bloom4.rgb * 0.15 + bloom8.rgb * 0.25 + bloom16.rgb * 0.3 + bloom32.rgb * 0.3;
+        vec3 glare = clamp(sunGlow * tint * sunAmount * 1.2, 0.0, 1.0);
         color = 1.0 - (1.0 - color) * (1.0 - glare);
     }
 
-    // Rain: flatter, dimmer light. Follows the live rain, not wetness (which stays high indoors
+    // Rain: dimmer light. Follows the live rain, not wetness (which stays high indoors
     // and after a shower), and fades out at close range so interiors stay crisp. Eased off where
     // the scene is already dark, so stormy nights aren't dimmed twice.
     float outside = sky > 0.5 ? 1.0 : smoothstep(3.0, 15.0, dist);
     float gloom = OPTION_KNOX_RAIN_GLOOM * smoothstep(0.0, 0.25, rainNow) * outside
                 * smoothstep(0.03, 0.35, knoxLuma(color));
-    color = mix(color, vec3(knoxLuma(color)), gloom * 0.5);
-    color *= 1.0 - gloom * 0.4;
+    // Dimmer only: saturation is already muted for rain above, and greying it again went milky.
+    color *= 1.0 - gloom * 0.3;
 
     // Optional extra night darkness (off by default) with light falloff: dim pixels lose more than
     // lit ones. Pixels that are already near-black skip the falloff.
@@ -436,7 +539,7 @@ void main() {
     // Inviting windows: at night, warm light sources (lit windows, lamps, fires) glow a little
     // brighter and more golden against the dark.
     float warmLight = smoothstep(0.3, 0.7, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
-    color += color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight;
+    color = knoxAddLight(color, color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight);
 
     // Shadow lift: a faint floor under the darkest values that fades out by the low mid-tones.
     vec3 toe = pow(clamp(1.0 - color, 0.0, 1.0), vec3(8.0));
