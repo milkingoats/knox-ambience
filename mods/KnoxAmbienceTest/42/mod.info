@@ -1,0 +1,12 @@
+name=Knox Ambience Test Mode
+id=KnoxAmbienceTest
+author=milkingoats
+url=https://github.com/milkingoats/knox-ambience
+description=Developer tool for Knox Ambience perf tests: loads a test save, walks and drives a recorded route by itself, then quits. Does nothing unless started by tools/perftest.
+
+require=\ZombieBuddy
+
+javaPkgName=knoxautotest
+javaJarFile=media/java/KnoxAmbienceTest.jar
+ZBVersionMin=2.3.4
+ZBVersionMax=2.99.99

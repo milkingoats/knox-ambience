@@ -10,7 +10,9 @@ This repo holds our own work:
 |------|------|
 | `mods/KnoxAmbience/` | Performance mod: small ZombieBuddy method patches aimed at smoother frames under Viewpoint |
 | `shaderpacks/KnoxAmbience/` | Original Iris-format shader pack for Viewpoint: overcast light, fog, dark nights, muted grading |
-| `docs/` | Plan, launcher settings, mod list |
+| `mods/KnoxAmbienceTest/` | Developer test mode: plays a recorded walk and drive by itself for perf tests |
+| `tools/` | Frame-time stats and the one-command perf test ([docs/perf-test.md](docs/perf-test.md)) |
+| `docs/` | Plan, launcher settings, mod list, measuring |
 
 Viewpoint is proprietary: we depend on it as a normal Workshop item and never bundle or modify it.
 Everything in this repo is our own code under the MIT licence.

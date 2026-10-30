@@ -18,7 +18,8 @@ On Windows, if Java 25 is not your default `java`, set `JAVA_HOME` to the JDK 25
 - `pzJar`: `Steam/steamapps/common/ProjectZomboid/projectzomboid.jar`
 - `zbJar`: `Steam/steamapps/workshop/content/108600/3619862853/mods/ZombieBuddy/libs/ZombieBuddy.jar`
 
-`install` builds the jar and copies it to `42/media/java/`. Then link or copy this folder
+`install` builds the jar and copies it to `42/media/java/`. It also builds the perf-test mode jar into
+`../KnoxAmbienceTest/42/media/java/` (see [../../docs/perf-test.md](../../docs/perf-test.md)). Then link or copy this folder
 (`mods/KnoxAmbience`) into `Zomboid/mods/` and enable it with ZombieBuddy and Viewpoint.
 
 Built against ZombieBuddy 2.3.4, the current Workshop release. ZombieBuddy 3.0 moves the
