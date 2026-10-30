@@ -4,7 +4,7 @@
 |-------|-----|-------------|-----|-------|
 | 1 | ZombieBuddy | 3619862853 | Java mod loader | Required by Viewpoint and our perf mod |
 | 2 | Project Viewpoint | 3809306528 | First/third-person renderer | Proprietary, dependency only |
-| 3 | Knox Ambience Perf | (ours) | Smoother frame times | This repo |
+| 3 | Knox Ambience | (ours) | Smoother frame times | This repo |
 | – | Knox Ambience shader pack | (ours, file drop) | Visuals | Copy to `Zomboid/viewpoint-shaderpacks` |
 
 To check: conflicts between each immersion mod and Viewpoint, and whether the add-ons below are

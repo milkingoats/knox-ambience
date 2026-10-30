@@ -1,4 +1,4 @@
-# Knox Ambience Perf
+# Knox Ambience (Java mod)
 
 A ZombieBuddy Java mod with small, targeted patches for smoother frame times under Project Viewpoint.
 See [../../docs/PLAN.md](../../docs/PLAN.md) for what we patch, what we avoid, and why.
@@ -13,7 +13,7 @@ gradle install -PpzJar=/path/to/projectzomboid.jar -PzbJar=/path/to/ZombieBuddy.
 ```
 
 `install` builds the jar and copies it to `42/media/java/`. Then link or copy this folder
-(`mods/KnoxAmbiencePerf`) into `Zomboid/mods/` and enable it with ZombieBuddy and Viewpoint.
+(`mods/KnoxAmbience`) into `Zomboid/mods/` and enable it with ZombieBuddy and Viewpoint.
 
 ## Patches
 
