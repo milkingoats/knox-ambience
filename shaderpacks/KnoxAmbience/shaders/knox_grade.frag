@@ -38,8 +38,18 @@
 #ifndef OPTION_KNOX_RAIN_GLOOM
 #define OPTION_KNOX_RAIN_GLOOM 0.3
 #endif
+// Debug view is an enum option: Viewpoint defines the selected value and one constant per value.
+#ifndef OPTION_KNOX_DEBUG_OFF
+#define OPTION_KNOX_DEBUG_OFF 0
+#endif
+#ifndef OPTION_KNOX_DEBUG_BARS
+#define OPTION_KNOX_DEBUG_BARS 1
+#endif
+#ifndef OPTION_KNOX_DEBUG_DEPTH
+#define OPTION_KNOX_DEBUG_DEPTH 2
+#endif
 #ifndef OPTION_KNOX_DEBUG
-#define OPTION_KNOX_DEBUG 0
+#define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
 #endif
 
 uniform sampler2D uColor;
@@ -82,14 +92,14 @@ void main() {
     float night = knoxNight();
     float rain = clamp(max(uRainStrength, uWet * 0.5), 0.0, 1.0);
 
-#if OPTION_KNOX_DEBUG == 1
+#if OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_BARS
     // Bars along the top, from the top down: uNight, sun-based night, uRainStrength, uWet.
     if (vUv.y > 0.88) {
         float v = vUv.y > 0.97 ? uNight : vUv.y > 0.94 ? knoxNight() : vUv.y > 0.91 ? uRainStrength : uWet;
         fragColor = vec4(vUv.x < v ? vec3(1.0, 0.8, 0.1) : vec3(0.1), 1.0);
         return;
     }
-#elif OPTION_KNOX_DEBUG == 2
+#elif OPTION_KNOX_DEBUG == OPTION_KNOX_DEBUG_DEPTH
     float dbgDepth = texture(uDepth, vUv).r;
     fragColor = vec4(vec3(dbgDepth < 1.0 ? knoxLinearDepth(dbgDepth) / max(uCamera.y, 1.0) : 1.0), 1.0);
     return;
