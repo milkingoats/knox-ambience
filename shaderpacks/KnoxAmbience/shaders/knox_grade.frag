@@ -104,7 +104,12 @@
 uniform sampler2D uColor;
 uniform sampler2D uDepth;     // non-linear 0..1, 1 = sky or distant world
 uniform sampler2D uFarDepth;  // Viewpoint's distant world (far terrain, shells, trees)
-uniform sampler2D uKnoxGlow;  // knox_glow.frag: quarter-size lit areas or sun glow (rgb), brightest lights (a)
+// Bloom pyramid: knox_glow.frag at quarter size, then halved three times by knox_down*.frag.
+// rgb is the bloom seed (brightest lights at night, bright sky by day), a the light spill amount.
+uniform sampler2D uKnoxGlow;
+uniform sampler2D uKnoxBloom8;
+uniform sampler2D uKnoxBloom16;
+uniform sampler2D uKnoxBloom32;
 uniform vec2 uFarRange;       // near and far planes of the distant world; x <= 0 when off
 uniform vec4 uCamera;         // x = near, y = far
 uniform vec2 uFogRange;       // Viewpoint's fog start and end distance
@@ -192,41 +197,38 @@ vec4 knoxSkyAbove(vec2 uv) {
     return vec4(0.0);
 }
 
-// Light from bright areas nearby, read from the quarter-size glow target (already blurred and
-// eased over frames). Returns the soft spill colour from the wider rings; halo is the warm glow
-// from the inner rings, only from the brightest lights (lamps, lit windows, fires).
-vec3 knoxSpill(vec2 uv, out vec3 halo) {
-    vec2 size = vec2(textureSize(uColor, 0));
-    vec2 aspect = vec2(size.y / size.x, 1.0);
-    vec3 spill = vec3(0.0);
-    halo = vec3(0.0);
-    for (int i = 0; i < 8; i++) {
-        float a = float(i) * 0.7853982 + 0.39;
-        vec2 dir = vec2(cos(a), sin(a)) * aspect;
-        vec4 g0 = textureLod(uKnoxGlow, uv + dir * 0.015, 0.0);
-        vec4 g1 = textureLod(uKnoxGlow, uv + dir * 0.045, 0.0);
-        vec4 g2 = textureLod(uKnoxGlow, uv + dir * 0.10, 0.0);
-        halo += g0.rgb * g0.a * 1.4 + g1.rgb * g1.a * 0.6;
-        spill += g1.rgb + g2.rgb;
-    }
-    halo *= 2.0 / 16.0;
-    return spill / 16.0 * 1.6;
+// One bloom level, upsampled with a 3 x 3 tent so the coarse levels stay smooth.
+vec4 knoxTent(sampler2D level, vec2 uv) {
+    vec2 t = 1.0 / vec2(textureSize(level, 0));
+    vec4 sum = textureLod(level, uv, 0.0) * 4.0;
+    sum += (textureLod(level, uv + vec2(t.x, 0.0), 0.0) + textureLod(level, uv - vec2(t.x, 0.0), 0.0)
+          + textureLod(level, uv + vec2(0.0, t.y), 0.0) + textureLod(level, uv - vec2(0.0, t.y), 0.0)) * 2.0;
+    sum += textureLod(level, uv + t, 0.0) + textureLod(level, uv - t, 0.0)
+         + textureLod(level, uv + vec2(t.x, -t.y), 0.0) + textureLod(level, uv + vec2(-t.x, t.y), 0.0);
+    return sum / 16.0;
 }
 
-// Sun glow: the bright sky from the glow target, spread wide (out to a fifth of the screen).
-// By day the glow target's rgb holds only the bright sky, so this never picks up lit walls.
-vec3 knoxSunGlow(vec2 uv) {
-    vec2 size = vec2(textureSize(uColor, 0));
-    vec2 aspect = vec2(size.y / size.x, 1.0);
-    vec3 glow = textureLod(uKnoxGlow, uv, 0.0).rgb;
-    for (int i = 0; i < 8; i++) {
-        float a = float(i) * 0.7853982;
-        vec2 dir = vec2(cos(a), sin(a)) * aspect;
-        glow += textureLod(uKnoxGlow, uv + dir * 0.03, 0.0).rgb * 0.8
-              + textureLod(uKnoxGlow, uv + dir * 0.09, 0.0).rgb * 0.5
-              + textureLod(uKnoxGlow, uv + dir * 0.2, 0.0).rgb * 0.3;
-    }
-    return glow / 13.8;
+// Soft shoulder: values above 0.8 roll off towards 1 instead of clipping.
+vec3 knoxShoulder(vec3 x) {
+    vec3 over = max(x - 0.8, 0.0);
+    return min(x, vec3(0.8)) + 0.2 * (1.0 - exp(-over / 0.2));
+}
+
+// Adds light through the soft shoulder, so glows over bright pixels roll off smoothly instead of
+// clipping to flat white. With nothing added, the pixel is returned unchanged.
+vec3 knoxAddLight(vec3 base, vec3 add) {
+    return base + knoxShoulder(base + add) - knoxShoulder(base);
+}
+
+// Night vision exposure lift that keeps each colour's hue: scales the whole pixel by its brightest
+// channel through an extended Reinhard curve, so dark pixels are lifted by about the gain and full
+// white stays white. A gain of 1 returns the pixel unchanged.
+vec3 knoxLift(vec3 c, float gain) {
+    float m = max(max(c.r, c.g), c.b);
+    if (m <= 1.0e-4 || gain <= 1.0) return c;
+    float l = gain * m;
+    float mapped = l * (1.0 + l / (gain * gain)) / (1.0 + l);
+    return c * (mapped / m);
 }
 
 // Linear distance for crack tests; sky counts as very far.
@@ -321,17 +323,24 @@ void main() {
     // The deepest darks are kept out of the lift, so night keeps its contrast instead of turning
     // into a milky haze.
     float gain = 1.0 + 1.4 * OPTION_KNOX_ADAPTATION * night * (1.0 - farness);
-    vec3 lifted = color * gain / (1.0 + color * (gain - 1.0));
-    color = mix(color, lifted, smoothstep(0.015, 0.12, knoxLuma(color)));
+    color = mix(color, knoxLift(color, gain), smoothstep(0.015, 0.12, knoxLuma(color)));
 
-    // Light spill into darker pixels, and warm halos around the brightest lights.
-    vec3 halo;
-    vec3 spill = knoxSpill(vUv, halo);
+    // The bloom pyramid, one tent tap per level.
+    vec4 bloom4 = knoxTent(uKnoxGlow, vUv);
+    vec4 bloom8 = knoxTent(uKnoxBloom8, vUv);
+    vec4 bloom16 = knoxTent(uKnoxBloom16, vUv);
+    vec4 bloom32 = knoxTent(uKnoxBloom32, vUv);
+
+    // Light spill into darker pixels from the wide levels, and halos around the brightest lights,
+    // tight near the light with a long soft tail.
+    vec3 spill = (bloom8.a * 0.5 + bloom16.a * 0.35 + bloom32.a * 0.15) * vec3(1.0, 0.86, 0.68) * 1.6;
+    vec3 halo = (bloom4.rgb * 0.45 + bloom8.rgb * 0.3 + bloom16.rgb * 0.17 + bloom32.rgb * 0.08)
+              * vec3(1.0, 0.92, 0.8) * 1.5;
     float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
     // Both are night effects: by day, bright doorways and sunlit walls would bloom into soft white
     // blobs on the surfaces around them.
-    color += spill * OPTION_KNOX_LIGHT_SPILL * night * 0.45 * spillRoom * (1.0 - farness);
-    color += halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * night * 0.5;
+    color = knoxAddLight(color, spill * OPTION_KNOX_LIGHT_SPILL * night * 0.45 * spillRoom * (1.0 - farness)
+                              + halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * night * 0.5);
 
     // Clarity: a little local contrast against a small blur, so surfaces read crisp. Eased off
     // at night, where it would make grass shimmer.
@@ -406,7 +415,8 @@ void main() {
     float sunAmount = OPTION_KNOX_SUN_GLOW * (1.0 - night) * (1.0 - 0.7 * muted);
     if (sunAmount > 0.0) {
         vec3 tint = mix(vec3(1.0, 0.95, 0.86), vec3(1.0, 0.74, 0.5), knoxGoldenHour());
-        vec3 glare = clamp(knoxSunGlow(vUv) * tint * sunAmount * 1.2, 0.0, 1.0);
+        vec3 sunGlow = bloom4.rgb * 0.15 + bloom8.rgb * 0.25 + bloom16.rgb * 0.3 + bloom32.rgb * 0.3;
+        vec3 glare = clamp(sunGlow * tint * sunAmount * 1.2, 0.0, 1.0);
         color = 1.0 - (1.0 - color) * (1.0 - glare);
     }
 
@@ -436,7 +446,7 @@ void main() {
     // Inviting windows: at night, warm light sources (lit windows, lamps, fires) glow a little
     // brighter and more golden against the dark.
     float warmLight = smoothstep(0.3, 0.7, knoxLuma(color)) * clamp((color.r - color.b) * 4.0, 0.0, 1.0);
-    color += color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight;
+    color = knoxAddLight(color, color * vec3(0.35, 0.22, 0.05) * OPTION_KNOX_WINDOW_GLOW * night * warmLight);
 
     // Shadow lift: a faint floor under the darkest values that fades out by the low mid-tones.
     vec3 toe = pow(clamp(1.0 - color, 0.0, 1.0), vec3(8.0));
