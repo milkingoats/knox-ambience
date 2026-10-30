@@ -17,3 +17,12 @@ mods/*/42/media/java/*.jar.zbs
 *.log
 *.tmp
 *.swp
+
+# OS clutter. Anything in shaderpacks/KnoxAmbience is bundled into the jar and installed for players.
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.pyc

@@ -2,7 +2,7 @@ name=Knox Ambience
 id=KnoxAmbience
 author=milkingoats
 url=https://github.com/milkingoats/knox-ambience
-description=Smoother frame times for Project Viewpoint: small, targeted ZombieBuddy patches.
+description=Smoother frame times for Project Viewpoint (small, targeted ZombieBuddy patches), plus the Knox Ambience shader pack, installed at startup.
 
 require=\ZombieBuddy
 

@@ -12,6 +12,9 @@ None found. All 11 Java add-on jars in the subscribed set were scanned. None of 
 classes KnoxAmbience patches: `WorldStreamer`, `ChunkSaveWorker`, `Alarm`, `AmbientStreamManager` or
 `Core.EndFrameUI`. Re-check when adding a new Java add-on.
 
+KnoxAmbience also hooks one method in Rolling Hills (`TrueWeatherCompat.supports`) so its hills stay
+on under our shader pack. Re-check that hook after a Rolling Hills update.
+
 ## Load order
 
 | Order | Mod | Workshop ID | Status | Notes |

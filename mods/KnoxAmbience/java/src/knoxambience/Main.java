@@ -31,7 +31,7 @@ public class Main {
         // prints "active" the first time it runs (see once()).
         System.out.println(TAG + "loaded. call swaps: streamer wake=" + ok(streamer)
                 + ", alarm println=" + ok(alarmLog)
-                + ". advice patches report 'active' on first use: addJob, hot save throttle, alarm tick.");
+                + ". advice patches report 'active' on first use: addJob, hot save throttle, alarm tick, Rolling Hills compat.");
         System.out.println(TAG + "shader pack: " + shaderPack);
     }
 

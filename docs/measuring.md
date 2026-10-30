@@ -18,11 +18,13 @@ side-by-side comparisons if you prefer a GUI.
 
 ## 2. GC log (garbage-collection pauses)
 
-Add one entry to `vmArgs` in `ProjectZomboid64.json` (game folder; back it up first). Leave the heap
-and GC flags alone so runs stay comparable:
+With ZombieBuddy the game starts through `ProjectZomboid64.bat` in the game folder, and the json's
+`vmArgs` are ignored (see [launcher.md](launcher.md)). Back up the `.bat`, then add this flag next to
+`-Xmx` on both `java.exe` lines. Keep the heap and GC flags the same across runs so they stay
+comparable. In a `.bat`, `%` must be written `%%`:
 
 ```
-"-Xlog:gc*:file=C:/Users/<you>/Zomboid/Logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20m",
+-Xlog:gc*:file=C:/Users/<you>/Zomboid/Logs/gc-%%t.log:time,uptime,level,tags:filecount=5,filesize=20m
 ```
 
 **The folder must already exist**, or the JVM refuses to start ("Invalid -Xlog option") and the game
@@ -31,10 +33,11 @@ It works with any collector (the launcher's default is ZGC; Viewpoint's launcher
 
 ## 3. KnoxAmbience frame log (why a frame was slow)
 
-Add `"-Dknoxambience.framelog=true",` to `vmArgs`. The mod then writes
+Add `-Dknoxambience.framelog=true` to both `java.exe` lines in `ProjectZomboid64.bat`. The mod then writes
 `Zomboid/Logs/knoxambience-frames-<time>.csv`, one row per frame: frame time, GC count and time during
-the frame, and tags that patches mark (e.g. a chunk save). Patches report with
-`FrameLog.mark("ChunkSave")`; it does nothing when the log is off. Set
+the frame, and tags that patches mark. Patches report with `FrameLog.mark("<tag>")`; it does nothing
+when the log is off. Current tags: `stream.request`, `stream.wake`, `save.hotsave`,
+`save.hotsave.deferred`, `save.chunk`. Set
 `-Dknoxambience.framelog.dir=...` to write somewhere else.
 
 ## Comparing runs
