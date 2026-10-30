@@ -97,6 +97,9 @@
 #ifndef OPTION_KNOX_VIGNETTE
 #define OPTION_KNOX_VIGNETTE 0.25
 #endif
+#ifndef OPTION_KNOX_SUNLIGHT
+#define OPTION_KNOX_SUNLIGHT 0.2
+#endif
 #ifndef OPTION_KNOX_EXPOSURE
 #define OPTION_KNOX_EXPOSURE 0.93
 #endif
@@ -548,6 +551,17 @@ void main() {
     // look. The sky is left alone (restored below), so exposure eases back to 1 towards the far
     // world, or distant land would sit darker than the sky behind it as a step at the horizon.
     color *= mix(OPTION_KNOX_EXPOSURE, 1.0, farness);
+
+    // Sunlight: by day, lit surfaces get brighter while shade stays where exposure put it, so the
+    // scene lightens the way stronger sun would, keeping its contrast. A gain on the upper
+    // mid-tones by lightness (hue kept), off at night and in rain, eased out with distance and
+    // before white so highlights don't clip.
+    {
+        float l = knoxLuma(color);
+        float lit = smoothstep(0.2, 0.55, l) * (1.0 - smoothstep(0.75, 0.95, l));
+        float sunGain = OPTION_KNOX_SUNLIGHT * (1.0 - night) * (1.0 - 0.7 * muted) * (1.0 - farness);
+        color *= 1.0 + sunGain * lit;
+    }
 
     // Contrast on lightness only, as a power curve around mid-grey on screen (0.45): darks go
     // darker without any channel clipping to zero, and the hue stays put. Eased off towards white.
