@@ -708,6 +708,8 @@ void main() {
     float contrast = OPTION_KNOX_CONTRAST + (0.12 * night + 0.1 * muted) * (1.0 - sky);
     vec3 contrasted = (color - 0.5) * contrast + 0.5;
     color = mix(contrasted, color, smoothstep(0.6, 0.95, knoxLuma(color)));
+    // The curve pushes deep darks below zero, and negative values would tint later steps.
+    color = max(color, 0.0);
 
     // Gentle highlight shoulder: compress the top end so overcast light reads soft, not bleached.
     float hl = knoxLuma(color);
