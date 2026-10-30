@@ -46,9 +46,12 @@ as 1.2 GB of the system's commit left (`process memory jumped ... of the system'
 Before raising the heap, or after adding many mods:
 
 - Look for that `console.txt` line. Keep at least 3–4 GB of commit left while playing.
-- Let Windows manage the page file size (System > Advanced system settings > Performance >
-  Advanced > Virtual memory), or set it to 16 GB or more. This raises the commit limit without
-  using RAM.
+- Give the page file a fixed size of 16 GB or more (System > Advanced system settings >
+  Performance > Advanced > Virtual memory > Custom size, e.g. 16384 to 32768 MB). This raises the
+  commit limit without using RAM. "System managed" is not enough: it only grows once commit is
+  nearly exhausted, and the growth itself can stall the game (the case above had a system-managed
+  9 GB page file).
+- Find out what else is committing memory (Task Manager > Details > add the "Commit size" column).
 - If it is still tight, use `-Xmx5g`, close browsers and other large apps, or lower the game's
   texture settings (texture compression also frees video memory).
 
