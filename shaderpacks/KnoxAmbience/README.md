@@ -5,7 +5,12 @@ shader pack, built for Zomboid's look.
 
 It builds on Viewpoint's own **Default** pack (`base=default`), so Viewpoint keeps all of its
 lighting, shadows, clouds, volumetrics and fog. Knox Ambience adds one full-screen pass at the very
-end (`shaders/knox_grade.frag`) that changes the mood:
+end (`shaders/knox_grade.frag`) that changes the mood, and reshapes Viewpoint's distance fog
+(`shaders/lib/fog_amount.glsl`):
+
+- **Softer distance fog**: fades in gently and stops short of a solid wall, so skylines stay as
+  soft silhouettes. The same curve applies to the near and the distant world, so there's no hard
+  seam where near trees end. Viewpoint's own fog colour and range still drive it.
 
 - **Rain fog**: extra grey fog while it rains, closer the harder it rains.
 - **Light falloff**: nights darken dim areas harder than lit ones, so lamp and flashlight pools stay
