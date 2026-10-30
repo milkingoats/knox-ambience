@@ -37,8 +37,8 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
   better 1% lows (106→116 walking, 114→139 driving), fewer spikes (walking p99.9 18.3→11.7 ms) and a
   much lighter game thread (52→36%, 48→28%). **Aim for smoothness, not average fps.**
 - **High value**
-  - Java memory: a 4 GB heap. Launcher setting, no code. The game already uses ZGC on Windows 10+,
-    so switching to G1 is unverified. See [launcher.md](launcher.md).
+  - Java memory: a bigger heap. Launcher setting, no code. Measured on 42.21: 6 GB with the stock ZGC
+    (see [launcher.md](launcher.md)).
   - Chunk streaming: wake the loader as soon as a chunk is requested (stock waits on a 140 ms timer);
     process chunks in parallel.
   - Zombie updates on worker threads; cache the lookups behind zombie state queries.
@@ -77,13 +77,13 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
 ## Next steps
 
 1. ~~Confirm Viewpoint and ZombieBuddy are available.~~ Done 2026-10-30.
-2. ~~Repo with this plan and both skeletons.~~ This change.
-3. Shader pack: native Viewpoint pack (`base=default`) with one final-stage grade pass: rain fog,
-   night light falloff, neutral nights, grading. Needs an in-game test. The Java mod copies the
-   pack into `viewpoint-shaderpacks` on startup (it loads before Viewpoint scans); needs an in-game test.
-4. Perf mod first patches: chunk-streamer wake, autosave limit, house-alarm sound fix. Code done
-   (branch `perf-first-patches`); needs an in-game test.
-5. Draft the mod list and load order ([modlist.md](modlist.md)); check known conflicts with Viewpoint.
+2. ~~Repo with this plan and both skeletons.~~ Done.
+3. Shader pack: native Viewpoint pack (`base=default`). Works in game; the look is still being tuned
+   (see [the pack's README](../shaderpacks/KnoxAmbience/README.md)). The Java mod copies the pack into
+   `viewpoint-shaderpacks` on startup; that copy works in game.
+4. Perf mod first patches: chunk-streamer wake, hot-save limit, house-alarm fix. Merged. Streamer
+   wake and hot-save limit confirmed in game; the alarm patches still need a house alarm to test.
+5. ~~Mod list and load order ([modlist.md](modlist.md)).~~ Confirmed 2026-10-30.
 
 Building and testing need a real machine: the game's `projectzomboid.jar`, JDK 25 and a GPU.
 
