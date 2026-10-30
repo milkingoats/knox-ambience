@@ -56,9 +56,9 @@ From PZ_Optimization's `docs/findings-viewpoint-2026-10-07.md` and `docs/guide/h
   are picked under Delete > Shaders.
 - **We write our own pack**, not a port of a Minecraft pack (most forbid redistributing changes).
   Target look: overcast light, fog, dark nights, wet roads, flashlight-lit interiors, muted grading.
-- Add-on ideas (ZombieBuddy, alongside Viewpoint): head bob and weapon sway, screen effects from the
-  character's state (pain, panic, drunk, tired), rain on the view, mask and helmet overlays,
-  flashlight improvements.
+- First-person feel is already covered by other add-ons (Immersive Camera Motion, Immersive Effects,
+  Equipment Overlays), and so are 3D trees, roofs, HD textures and 3D props. We don't build those;
+  see [modlist.md](modlist.md). Remaining add-on ideas: rain on the view, flashlight improvements.
 - Target GPU: RTX 4070 Ti, 12 GB. Video memory is the limit (Viewpoint used ~12 GB on a 4090 at 5K):
   lower draw distance first. No ray tracing (OpenGL). The DLSS Frame Generation add-on (3818838508,
   beta, Windows-only) freezes when the PZ_Optimization UI is on.
