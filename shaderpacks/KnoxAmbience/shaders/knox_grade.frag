@@ -56,7 +56,7 @@
 #define OPTION_KNOX_SKY_FILL 0.3
 #endif
 #ifndef OPTION_KNOX_AO_BOUNCE
-#define OPTION_KNOX_AO_BOUNCE 0.5
+#define OPTION_KNOX_AO_BOUNCE 0.0
 #endif
 #ifndef OPTION_KNOX_RIM
 #define OPTION_KNOX_RIM 0.0
@@ -96,6 +96,9 @@
 #endif
 #ifndef OPTION_KNOX_VIGNETTE
 #define OPTION_KNOX_VIGNETTE 0.25
+#endif
+#ifndef OPTION_KNOX_EXPOSURE
+#define OPTION_KNOX_EXPOSURE 0.93
 #endif
 #ifndef OPTION_KNOX_RAIN_GLOOM
 #define OPTION_KNOX_RAIN_GLOOM 0.3
@@ -139,7 +142,7 @@
 #define OPTION_KNOX_STYLE_NATURAL 1
 #endif
 #ifndef OPTION_KNOX_STYLE
-#define OPTION_KNOX_STYLE OPTION_KNOX_STYLE_CLASSIC
+#define OPTION_KNOX_STYLE OPTION_KNOX_STYLE_NATURAL
 #endif
 #ifndef OPTION_KNOX_DEBUG
 #define OPTION_KNOX_DEBUG OPTION_KNOX_DEBUG_OFF
@@ -286,13 +289,15 @@ vec3 knoxLift(vec3 c, float gain) {
 // bouncing inside a corner takes on the surface's colour, so a red brick corner reads red instead
 // of grey. Viewpoint's lighting already applies multi-bounce AO, so this only shifts the hue and
 // keeps brightness: brightening again lit a pale, sparkly ring wherever AO is (round the base of
-// cars, door frames, window panes). Returns a factor with luma 1.
+// cars, door frames, window panes). Returns a factor with luma 1, kept within 10% per channel:
+// normalising to luma lets red swing far (it weighs only 0.21), and a wider range painted red
+// rings round wall lamps on red siding.
 vec3 knoxAoTint(float ao, vec3 albedo) {
     vec3 a = 2.0404 * albedo - 0.3324;
     vec3 b = -4.7951 * albedo + 0.6417;
     vec3 c = 2.7552 * albedo + 0.6903;
     vec3 bounced = max(vec3(ao), ((ao * a + b) * ao + c) * ao) / ao;
-    return clamp(bounced / max(knoxLuma(bounced), 1.0e-3), 0.7, 1.4);
+    return clamp(bounced / max(knoxLuma(bounced), 1.0e-3), 0.9, 1.1);
 }
 
 // Surface light from the G-buffer, near world only: sky fill, ground bounce, coloured AO, rim.
@@ -537,11 +542,16 @@ void main() {
         color += clamp(detail, -0.08, 0.08) * OPTION_KNOX_CLARITY * (1.0 - 0.7 * night) * (1.0 - farness);
     }
 
+    // Exposure: Natural sits a little darker than Viewpoint's image, for a cozier, lower-key
+    // look. Sky left alone (restored below).
+    color *= OPTION_KNOX_EXPOSURE;
+
     // Contrast on lightness only, as a power curve around mid-grey on screen (0.45): darks go
     // darker without any channel clipping to zero, and the hue stays put. Eased off towards white.
+    // A little stronger than Classic's setting for depth.
     {
         float l = max(knoxLuma(color), 1.0e-4);
-        float k = OPTION_KNOX_CONTRAST + (0.06 * night + 0.05 * muted) * (1.0 - sky);
+        float k = OPTION_KNOX_CONTRAST + 0.07 + (0.06 * night + 0.05 * muted) * (1.0 - sky);
         float curved = 0.45 * pow(l / 0.45, k);
         curved = mix(curved, l, smoothstep(0.6, 0.95, l));
         color *= curved / l;
@@ -571,7 +581,7 @@ void main() {
     // to keep brightness, so it reads as the light's colour, not a filter.
     {
         float warm = OPTION_KNOX_WARMTH / 0.35;
-        vec3 wb = vec3(1.0 + 0.035 * warm, 1.0, 1.0 - 0.05 * warm);
+        vec3 wb = vec3(1.0 + 0.05 * warm, 1.0, 1.0 - 0.07 * warm);
         wb = mix(wb, vec3(1.10, 0.98, 0.86), clamp(golden, 0.0, 1.0));
         wb = mix(wb, vec3(0.97, 1.0, 1.04), muted);
         wb = mix(wb, vec3(1.0), night);

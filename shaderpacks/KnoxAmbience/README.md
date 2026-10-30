@@ -72,11 +72,11 @@ light buffer as it comes) and **Colourfulness** (a heat map of saturation).
 
 ## Grade style
 
-**Classic** is the original grade. **Natural** reworks the colour maths: contrast and saturation
+**Natural** is the default; **Classic** is the original grade. Natural reworks the colour maths: contrast and saturation
 act on lightness and chroma only, so no hue drifts or clips; one white balance replaces the stacked
 warm tints; the night lift stops before the mid-tones; there is no grey shadow toe or daytime sun
 glow; and night colour is left to Viewpoint's own Night colour shift. Compare both with the
-Default pack in the same spots. Uniforms Viewpoint doesn't
+Default pack in the same spots. **Knox exposure** (Natural only, default 0.93) sets how low-key it sits. Uniforms Viewpoint doesn't
 set read as 0, which the pack treats as "clear day", so nothing breaks; it just looks plainer.
 
 The pack is written from scratch. It uses Viewpoint's pack format and uniform names, never its code.
