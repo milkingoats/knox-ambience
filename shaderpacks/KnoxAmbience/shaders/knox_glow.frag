@@ -67,10 +67,13 @@ void main() {
 #endif
             // Sun glow: only the brightest sky (the sun and the clouds it lights), never lit walls
             // or roads, so daytime surfaces don't bloom into white blobs.
+#if OPTION_KNOX_STYLE != OPTION_KNOX_STYLE_NATURAL
+            // Natural has no sun glow, so it skips the sky test (two depth reads a tap).
             if (knoxIsSky(vUv + o)) {
                 skyTaps += 1.0;
                 if (l > 0.82) sun += c * smoothstep(0.82, 0.98, l);
             }
+#endif
         }
     }
     // Real sky fills most of the block. One or two "sky" taps are hairline gaps in floors, walls

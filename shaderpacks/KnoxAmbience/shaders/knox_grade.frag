@@ -518,12 +518,14 @@ void main() {
 
     // Glow: lamp light spills into the dark around it and the brightest lights get a halo. Night
     // only, and weaker than Classic: Viewpoint already mixes in its own bloom haze, and there is
-    // no daytime sun glow (Viewpoint has sun shafts).
-    vec4 bloom4 = knoxTent(uKnoxGlow, vUv);
-    vec4 bloom8 = knoxTent(uKnoxBloom8, vUv);
-    vec4 bloom16 = knoxTent(uKnoxBloom16, vUv);
-    vec4 bloom32 = knoxTent(uKnoxBloom32, vUv);
-    {
+    // no daytime sun glow (Viewpoint has sun shafts). By day nothing reads the pyramid, so it's
+    // skipped. The two fine levels take one bilinear fetch each; only the coarse ones need the
+    // tent to stay smooth (18 fetches instead of 36).
+    if (night > 0.0) {
+        vec4 bloom4 = textureLod(uKnoxGlow, vUv, 0.0);
+        vec4 bloom8 = textureLod(uKnoxBloom8, vUv, 0.0);
+        vec4 bloom16 = knoxTent(uKnoxBloom16, vUv);
+        vec4 bloom32 = knoxTent(uKnoxBloom32, vUv);
         vec3 spill = (bloom8.a * 0.5 + bloom16.a * 0.35 + bloom32.a * 0.15) * vec3(1.0, 0.86, 0.68) * 1.6;
         vec3 halo = bloom4.rgb * 0.45 + bloom8.rgb * 0.3 + bloom16.rgb * 0.17 + bloom32.rgb * 0.08;
         float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
@@ -543,15 +545,16 @@ void main() {
     }
 
     // Exposure: Natural sits a little darker than Viewpoint's image, for a cozier, lower-key
-    // look. Sky left alone (restored below).
-    color *= OPTION_KNOX_EXPOSURE;
+    // look. The sky is left alone (restored below), so exposure eases back to 1 towards the far
+    // world, or distant land would sit darker than the sky behind it as a step at the horizon.
+    color *= mix(OPTION_KNOX_EXPOSURE, 1.0, farness);
 
     // Contrast on lightness only, as a power curve around mid-grey on screen (0.45): darks go
     // darker without any channel clipping to zero, and the hue stays put. Eased off towards white.
     // A little stronger than Classic's setting for depth.
     {
         float l = max(knoxLuma(color), 1.0e-4);
-        float k = OPTION_KNOX_CONTRAST + 0.07 + (0.06 * night + 0.05 * muted) * (1.0 - sky);
+        float k = OPTION_KNOX_CONTRAST + (0.07 + 0.06 * night + 0.05 * muted) * (1.0 - farness) * (1.0 - sky);
         float curved = 0.45 * pow(l / 0.45, k);
         curved = mix(curved, l, smoothstep(0.6, 0.95, l));
         color *= curved / l;
