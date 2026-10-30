@@ -186,9 +186,12 @@ void main() {
 
     color = mix(color, ungraded, sky);
 
-    // Rain: flatter, dimmer light. Eased off where the scene is already dark, so stormy nights
-    // aren't dimmed twice.
-    float gloom = OPTION_KNOX_RAIN_GLOOM * rain * smoothstep(0.03, 0.35, knoxLuma(color));
+    // Rain: flatter, dimmer light. Follows the live rain, not wetness (which stays high indoors
+    // and after a shower), and fades out at close range so interiors stay crisp. Eased off where
+    // the scene is already dark, so stormy nights aren't dimmed twice.
+    float outside = dist < 0.0 ? 1.0 : smoothstep(3.0, 15.0, dist);
+    float gloom = OPTION_KNOX_RAIN_GLOOM * smoothstep(0.0, 0.25, rainNow) * outside
+                * smoothstep(0.03, 0.35, knoxLuma(color));
     color = mix(color, vec3(knoxLuma(color)), gloom * 0.5);
     color *= 1.0 - gloom * 0.4;
 
