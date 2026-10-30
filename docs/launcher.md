@@ -2,38 +2,39 @@
 
 ## Java memory
 
-**Current advice: raise the heap to 4 GB only.** Keep the stock garbage collector until we have
-measured.
+**Advice: raise the heap to 6 GB and keep the stock collector (ZGC).** Measured on 42.21 below.
 
-What the game does today (42.21, read from `ProjectZomboid64.json` on 2026-10-30):
+What the game does today (42.21, checked 2026-10-30):
 
-- The base `vmArgs` set `-Xmx3072m` (3 GB heap).
-- On Windows 10 1803 (`10.0.17134`) and newer, including Windows 11, the game adds `-XX:+UseZGC`.
-  Only Windows 7 (`6.1`) gets `-XX:+UseG1GC`.
+- The heap is `-Xmx3072m` (3 GB). The collector is ZGC on Windows 10 1803 and newer, G1 only on
+  Windows 7.
+- With ZombieBuddy installed, the game starts through `ProjectZomboid64.bat` in the game folder
+  (Steam launch options point at it), not through `ProjectZomboid64.json`. **Edit the `.bat`**: the
+  json is ignored. The `.bat` has two `java.exe` lines (the second is a fallback); change both.
 
-So the stock collector on a current PC is already ZGC, not the old default. The PZ_Optimization
-numbers below may come from a different setup. The G1 advice is **unverified** until we compare ZGC
-with G1 on 42.21 ourselves.
+To raise the heap: back up `ProjectZomboid64.bat`, then replace `-Xmx3072m` with `-Xmx6g` on both
+lines. A ZombieBuddy reinstall or update may rewrite the `.bat`, so re-check it afterwards.
 
-To raise the heap: in the `vmArgs` list, replace `-Xmx3072m` with `-Xmx4g`. Back up the file first.
+### Measurement (2026-10-30)
 
-### Not yet verified: G1 with a 4 GB heap
+Same save and road, 2 minutes driving each, debug mode off, KnoxAmbience on, fresh game start for
+each run, PresentMon capture (first 5 s skipped). RTX 4070 Ti, i7-13700KF, 32 GB RAM.
 
-With stock memory settings, Viewpoint sessions stalled on garbage collection 25–94 times per run
-(PZ_Optimization's measurements). Switching to G1 with a fixed 4 GB heap removes most of those stalls.
+| | 3 GB | 6 GB |
+|---|---|---|
+| Average | 131.6 fps | 135.6 fps |
+| 1% low | 43.7 fps | 52.6 fps |
+| 0.1% low | 33.5 fps | 38.6 fps |
+| p99 frame time | 18.6 ms | 14.6 ms |
+| Worst frame | 46.6 ms | 32.3 ms |
+| GC cycles in the session | 484 | 154 |
 
-On Windows, edit `ProjectZomboid64.json` in the game folder
-(`Steam\steamapps\common\ProjectZomboid`). Back it up first. In the `vmArgs` list:
+At 3 GB the heap was 92–94% full before each collection and 76–83% after, so ZGC ran almost
+continuously alongside Viewpoint's threads. At 6 GB it drops to about 45% after each collection. One
+run each, so treat small differences as noise; the 1% low and p99 changes are well beyond it.
 
-- replace the existing `-Xmx...` entry with `-Xmx4g`
-- add `-Xms4g` so the heap doesn't grow and shrink mid-game
-- add `-XX:+UseG1GC` if no other `-XX:+Use...GC` flag is present (remove any other collector flag)
-- optionally add `-XX:MaxGCPauseMillis=8` to bias G1 towards short pauses
-
-Steam updates can overwrite this file, so re-check it after a game update.
-
-> Not yet verified on Build 42.21. Measure before and after (frame-time capture while walking and
-> driving) and record the numbers here.
+G1 (PZ_Optimization's suggestion) has not been compared with ZGC on 42.21. ZGC pauses were under
+0.1 ms in every run, so there is little reason to switch.
 
 ## ZombieBuddy
 
