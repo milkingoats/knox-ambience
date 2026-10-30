@@ -7,8 +7,9 @@ import java.util.Set;
  * Answers "is this Viewpoint shader pack built on one of Viewpoint's own looks?" for shims into other
  * mods (Patch_RollingHills_supports).
  *
- * Reads Viewpoint's active pack by reflection, through public fields only, so nothing here is compiled
- * against Viewpoint: ShaderPacks$Active.pack, then ShaderPack.id and ShaderPack.base up the chain.
+ * Reads Viewpoint's pack by reflection, through public fields only, so nothing here is compiled against
+ * Viewpoint: ShaderPack.id and ShaderPack.base up the chain. Callers may pass the ShaderPack itself
+ * (Rolling Hills' TrueWeatherCompat.supports does) or a ShaderPacks$Active, which holds it in .pack.
  * If those fields are missing after a Viewpoint update, it logs once and answers no, which leaves the
  * other mod's own behaviour unchanged.
  *
@@ -25,10 +26,10 @@ public final class ShaderPackBase {
 
     private ShaderPackBase() {}
 
-    public static boolean builtOnViewpointLook(Object active) {
-        if (active == null || broken) return false;
+    public static boolean builtOnViewpointLook(Object packOrActive) {
+        if (packOrActive == null || broken) return false;
         try {
-            Object pack = field(active, "pack");
+            Object pack = hasField(packOrActive, "pack") ? field(packOrActive, "pack") : packOrActive;
             String id = pack == null ? null : (String) field(pack, "id");
             for (int depth = 0; pack != null && depth < MAX_DEPTH; depth++) {
                 Object packId = field(pack, "id");
@@ -48,6 +49,15 @@ public final class ShaderPackBase {
 
     // The fields are public, but their classes may not be (ShaderPacks$Active is a nested class), so
     // allow access explicitly. Viewpoint runs on the class path, so this needs no module opens.
+    private static boolean hasField(Object owner, String name) {
+        try {
+            owner.getClass().getField(name);
+            return true;
+        } catch (NoSuchFieldException e) {
+            return false;
+        }
+    }
+
     private static Object field(Object owner, String name) throws ReflectiveOperationException {
         Field f = owner.getClass().getField(name);
         f.setAccessible(true);
