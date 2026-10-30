@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.project
+.settings/
+
+# Built jars are produced locally, not committed
+mods/*/42/media/java/*.jar
+mods/*/42/media/java/*.jar.zbs
+
+*.log
+*.tmp
+*.swp
