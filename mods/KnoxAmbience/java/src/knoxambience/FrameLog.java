@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
  * folder given by {@code -Dknoxambience.framelog.dir=...}.
  *
  * Columns: frame, t_ms (since logging started), frame_ms (time since the previous frame ended),
- * gc_count and gc_ms (collections and collector time during the frame, all collectors summed),
+ * gc_count and gc_ms (GC pauses and pause time during the frame, all collectors summed),
  * tags (what {@link #mark} reported during the frame, separated by '|').
  *
  * Patches call {@link #mark(String)} when something expensive happens, e.g. a chunk save, so a slow
@@ -100,7 +100,7 @@ public final class FrameLog {
         started = true;
         startNanos = now;
         lastNanos = now;
-        gcBeans = ManagementFactory.getGarbageCollectorMXBeans();
+        gcBeans = pauseBeans();
         for (GarbageCollectorMXBean bean : gcBeans) {
             lastGcCount += Math.max(0, bean.getCollectionCount());
             lastGcMs += Math.max(0, bean.getCollectionTime());
@@ -145,6 +145,16 @@ public final class FrameLog {
             out.flush();
         } catch (IOException ignored) {
         }
+    }
+
+    // ZGC and Shenandoah report pauses and concurrent cycles as separate beans. Count only the
+    // pause beans when there are any, since concurrent work doesn't stop the game thread.
+    private static List<GarbageCollectorMXBean> pauseBeans() {
+        List<GarbageCollectorMXBean> all = ManagementFactory.getGarbageCollectorMXBeans();
+        List<GarbageCollectorMXBean> pauses = all.stream()
+                .filter(bean -> bean.getName().contains("Pauses"))
+                .toList();
+        return pauses.isEmpty() ? all : pauses;
     }
 
     private static Path outputDir() {

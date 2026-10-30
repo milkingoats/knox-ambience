@@ -25,7 +25,9 @@ and GC flags alone so runs stay comparable:
 "-Xlog:gc*:file=C:/Users/<you>/Zomboid/Logs/gc-%t.log:time,uptime,level,tags:filecount=5,filesize=20m",
 ```
 
-Each pause is logged with its length, so a spike can be matched to a GC pause by time.
+**The folder must already exist**, or the JVM refuses to start ("Invalid -Xlog option") and the game
+won't launch. Each pause is logged with its length, so a spike can be matched to a GC pause by time.
+It works with any collector (the launcher's default is ZGC; Viewpoint's launcher may pick another).
 
 ## 3. KnoxAmbience frame log (why a frame was slow)
 
