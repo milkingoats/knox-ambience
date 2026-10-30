@@ -30,7 +30,7 @@ void main() {
             // Only real light sources and lit surfaces spill; moonlit roads and pale walls don't, or the
             // night turns hazy.
             spill += c * smoothstep(0.4, 0.85, l) * clamp((c.r - c.b) * 3.0 + 0.4, 0.0, 1.0);
-            halo += smoothstep(0.55, 0.95, l);
+            halo += smoothstep(0.55, 0.95, l) * clamp((c.r - c.b) * 3.0 + 0.2, 0.0, 1.0);
         }
     }
     vec4 now = vec4(spill / 16.0, halo / 16.0);

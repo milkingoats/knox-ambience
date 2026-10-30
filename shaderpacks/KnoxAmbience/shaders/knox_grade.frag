@@ -307,8 +307,10 @@ void main() {
     vec3 halo;
     vec3 spill = knoxSpill(vUv, halo);
     float spillRoom = 1.0 - smoothstep(0.05, 0.45, knoxLuma(color));
-    color += spill * OPTION_KNOX_LIGHT_SPILL * (0.3 + 0.7 * night) * 0.45 * spillRoom * (1.0 - farness);
-    color += halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * (0.25 + 0.75 * night) * 0.5;
+    // Both are night effects: by day, bright doorways and sunlit walls would bloom into soft white
+    // blobs on the surfaces around them.
+    color += spill * OPTION_KNOX_LIGHT_SPILL * night * 0.45 * spillRoom * (1.0 - farness);
+    color += halo * vec3(1.0, 0.85, 0.65) * OPTION_KNOX_LAMP_HALO * night * 0.5;
 
     // Clarity: a little local contrast against a small blur, so surfaces read crisp. Eased off
     // at night, where it would make grass shimmer.
