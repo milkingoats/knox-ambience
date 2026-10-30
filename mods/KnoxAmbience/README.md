@@ -25,6 +25,12 @@ None yet. Planned first patches:
 | Limit autosave frequency | world save | to do |
 | Fix the house-alarm sound check | alarm sound update | to do |
 
+## Frame log (debug)
+
+`FrameLog` writes per-frame timings to CSV when the game runs with `-Dknoxambience.framelog=true`.
+Patches call `FrameLog.mark("Tag")` when they do something expensive so slow frames can be traced.
+See [../../docs/measuring.md](../../docs/measuring.md).
+
 Rules: one patch class per file, named `Patch_<GameClass>_<method>`; never patch code that Viewpoint
 patches (line of sight, culling/LOD, light prefetch, vsync/frame pacing); never copy code from
 PZ_Optimization or decompiled game code.
