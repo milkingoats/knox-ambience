@@ -154,6 +154,11 @@ void main() {
     float sat = OPTION_KNOX_SATURATION * (1.0 - OPTION_KNOX_NIGHT_NEUTRAL * night * (1.0 - warmHue));
     sat = mix(sat, max(sat, 1.0), warmHue * OPTION_KNOX_WARMTH);
     color = mix(vec3(knoxLuma(color)), color, sat);
+
+    // Dark areas lose their colour cast whatever the time of day says (dusk skies tint the shadows
+    // purple or blue). Warm light keeps its colour.
+    float darkness = 1.0 - smoothstep(0.03, 0.3, knoxLuma(color));
+    color = mix(color, vec3(knoxLuma(color)), OPTION_KNOX_NIGHT_NEUTRAL * 0.8 * darkness * (1.0 - warmHue));
     // Contrast around mid-grey, eased off towards white so skies and pale roads keep detail
     // instead of clipping.
     vec3 contrasted = (color - 0.5) * OPTION_KNOX_CONTRAST + 0.5;
